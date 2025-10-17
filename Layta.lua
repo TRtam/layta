@@ -103,7 +103,7 @@ local function createStyle()
 		borderTopRightRadius = "auto",
 		borderBottomLeftRadius = "auto",
 		borderBottomRightRadius = "auto",
-		strokeWeight = 1,
+		strokeWeight = "auto",
 		strokeLeftWeight = "auto",
 		strokeTopWeight = "auto",
 		strokeRightWeight = "auto",
@@ -142,7 +142,7 @@ function Layta.Node:constructor(attributes)
 		borderTopRightRadius = { value = 0, unit = "auto" },
 		borderBottomLeftRadius = { value = 0, unit = "auto" },
 		borderBottomRightRadius = { value = 0, unit = "auto" },
-		strokeWeight = { value = 1, unit = "pixel" },
+		strokeWeight = { value = 0, unit = "auto" },
 		strokeLeftWeight = { value = 0, unit = "auto" },
 		strokeTopWeight = { value = 0, unit = "auto" },
 		strokeRightWeight = { value = 0, unit = "auto" },
@@ -647,6 +647,9 @@ function Layta.computeLayout(
 			local flexResolvedMainSize = flexIsMainAxisRow and resolvedWidth or resolvedHeight
 			local flexResolvedCrossSize = flexIsMainAxisRow and resolvedHeight or resolvedWidth
 
+			local flexContainerMainFitToContent = false
+			local flexContainerCrossFitToContent = false
+
 			if
 				not flexContainerMainSizeDefined
 				and (flexResolvedMainSize.unit == "auto" or flexResolvedMainSize.unit == "fit-content")
@@ -658,6 +661,7 @@ function Layta.computeLayout(
 				flexContainerMainSizeDefined = true
 				flexContainerMainInnerSize = flexLinesMainMaximumSize - flexPaddingMainStart
 				computedLayout.flexBasis = parentFlexIsMainAxisRow and computedWidth or computedHeight
+				flexContainerMainFitToContent = true
 			end
 
 			if
@@ -671,6 +675,7 @@ function Layta.computeLayout(
 				flexContainerCrossSizeDefined = true
 				flexContainerCrossInnerSize = flexLinesCrossTotalSize - flexPaddingCrossStart
 				computedLayout.flexBasis = parentFlexIsMainAxisRow and computedWidth or computedHeight
+				flexContainerCrossFitToContent = true
 			end
 
 			if flexSecondPassChildren then
@@ -718,6 +723,28 @@ function Layta.computeLayout(
 						true,
 						false
 					)
+
+				if flexContainerMainFitToContent then
+					computedWidth = flexIsMainAxisRow and (flexLinesMainMaximumSize + flexPaddingMainEnd)
+						or computedWidth
+					computedHeight = not flexIsMainAxisRow and (flexLinesMainMaximumSize + flexPaddingMainEnd)
+						or computedHeight
+					flexContainerMainSize = flexIsMainAxisRow and computedWidth or computedHeight
+					flexContainerMainSizeDefined = true
+					flexContainerMainInnerSize = flexLinesMainMaximumSize - flexPaddingMainStart
+					computedLayout.flexBasis = parentFlexIsMainAxisRow and computedWidth or computedHeight
+				end
+
+				if flexContainerCrossFitToContent then
+					computedWidth = not flexIsMainAxisRow and (flexLinesCrossTotalSize + flexPaddingCrossEnd)
+						or computedWidth
+					computedHeight = flexIsMainAxisRow and (flexLinesCrossTotalSize + flexPaddingCrossEnd)
+						or computedHeight
+					flexContainerCrossSize = flexIsMainAxisRow and computedHeight or computedWidth
+					flexContainerCrossSizeDefined = true
+					flexContainerCrossInnerSize = flexLinesCrossTotalSize - flexPaddingCrossStart
+					computedLayout.flexBasis = parentFlexIsMainAxisRow and computedWidth or computedHeight
+				end
 			end
 
 			if flexThirdPassChildren then
@@ -789,7 +816,7 @@ function Layta.computeLayout(
 					end
 				end
 
-				flexLines = flexSplitChildrenIntoLines(
+				flexLines, flexLinesMainMaximumSize, flexLinesCrossTotalSize = flexSplitChildrenIntoLines(
 					node,
 					flexIsMainAxisRow,
 					flexMainAxisDimension,
@@ -813,6 +840,28 @@ function Layta.computeLayout(
 					true,
 					true
 				)
+
+				if flexContainerMainFitToContent then
+					computedWidth = flexIsMainAxisRow and (flexLinesMainMaximumSize + flexPaddingMainEnd)
+						or computedWidth
+					computedHeight = not flexIsMainAxisRow and (flexLinesMainMaximumSize + flexPaddingMainEnd)
+						or computedHeight
+					flexContainerMainSize = flexIsMainAxisRow and computedWidth or computedHeight
+					flexContainerMainSizeDefined = true
+					flexContainerMainInnerSize = flexLinesMainMaximumSize - flexPaddingMainStart
+					computedLayout.flexBasis = parentFlexIsMainAxisRow and computedWidth or computedHeight
+				end
+
+				if flexContainerCrossFitToContent then
+					computedWidth = not flexIsMainAxisRow and (flexLinesCrossTotalSize + flexPaddingCrossEnd)
+						or computedWidth
+					computedHeight = flexIsMainAxisRow and (flexLinesCrossTotalSize + flexPaddingCrossEnd)
+						or computedHeight
+					flexContainerCrossSize = flexIsMainAxisRow and computedHeight or computedWidth
+					flexContainerCrossSizeDefined = true
+					flexContainerCrossInnerSize = flexLinesCrossTotalSize - flexPaddingCrossStart
+					computedLayout.flexBasis = parentFlexIsMainAxisRow and computedWidth or computedHeight
+				end
 			end
 
 			local flexLinesAlignItemsOffset = flexAlignItems == "center"
@@ -959,6 +1008,54 @@ local rectangleShaderRaw = [[
 
 local function getColorAlpha(color)
 	return math.floor(color / 0x1000000) % 0x100
+end
+
+local function HUE2RGB(p, q, t)
+	local tMod = t
+
+	if tMod < 0 then
+		tMod = tMod + 1
+	end
+
+	if tMod > 1 then
+		tMod = tMod - 1
+	end
+
+	if tMod < 1 / 6 then
+		return p + (q - p) * 6 * tMod
+	elseif tMod < 1 / 2 then
+		return q
+	elseif tMod < 2 / 3 then
+		return p + (q - p) * (2 / 3 - tMod) * 6
+	end
+
+	return p
+end
+
+function Layta.HSL(h, s, l, alpha)
+	local red, green, blue
+
+	if s == 0 then
+		red, green, blue = l, l, l
+	else
+		local q = (l < 0.5) and (l * (1 + s)) or (l + s - l * s)
+		local p = 2 * l - q
+
+		local hueR = h + 1 / 3
+		local hueG = h
+		local hueB = h - 1 / 3
+
+		red = HUE2RGB(p, q, hueR)
+		green = HUE2RGB(p, q, hueG)
+		blue = HUE2RGB(p, q, hueB)
+	end
+
+	local r = math.floor(red * 255)
+	local g = math.floor(green * 255)
+	local b = math.floor(blue * 255)
+	local a = math.floor((alpha or 1) * 255)
+
+	return a * 0x1000000 + r * 0x10000 + g * 0x100 + b
 end
 
 function Layta.renderer(node, px, py)
