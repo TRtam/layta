@@ -77,7 +77,7 @@ local function resolveLength(length)
 	end
 end
 
-function Layta.Style()
+local function createStyle()
 	return {
 		display = "flex",
 		flexDirection = "row",
@@ -98,6 +98,11 @@ function Layta.Style()
 		paddingBottom = "auto",
 		width = "auto",
 		height = "auto",
+		borderRadius = 0,
+		borderTopLeftRadius = "auto",
+		borderTopRightRadius = "auto",
+		borderBottomLeftRadius = "auto",
+		borderBottomRightRadius = "auto",
 		backgroundColor = 0x00ffffff,
 	}
 end
@@ -122,8 +127,13 @@ function Layta.Node:constructor(attributes)
 		paddingBottom = { value = 0, unit = "auto" },
 		width = { value = 0, unit = "auto" },
 		height = { value = 0, unit = "auto" },
+		borderRadius = { value = 0, unit = "pixel" },
+		borderTopLeftRadius = { value = 0, unit = "auto" },
+		borderTopRightRadius = { value = 0, unit = "auto" },
+		borderBottomLeftRadius = { value = 0, unit = "auto" },
+		borderBottomRightRadius = { value = 0, unit = "auto" },
 	}
-	self.__style = Layta.Style()
+	self.__style = createStyle()
 	self.style = createProxy(self.__style, function(key, value)
 		local resolvedStyle = self.resolvedStyling[key]
 		if resolvedStyle then
@@ -132,6 +142,7 @@ function Layta.Node:constructor(attributes)
 		self:markDirty()
 	end)
 	self.computedLayout = { width = 0, height = 0, x = 0, y = 0, flexContainerMainSize = 0, flexContainerCrossSize = 0 }
+	self.render = {}
 	if attributes then
 		for key, value in pairs(attributes) do
 			if key ~= "id" and key ~= "children" then
@@ -566,7 +577,7 @@ function Layta.computeLayout(
 
 			if
 				not flexContainerCrossSizeDefined
-				and (flexResolvedCrossSize.unit == "auto" and flexResolvedCrossSize.unit == "fit-content")
+				and (flexResolvedCrossSize.unit == "auto" or flexResolvedCrossSize.unit == "fit-content")
 			then
 				computedWidth = not flexIsMainAxisRow and (flexLinesCrossTotalSize + flexPaddingCrossEnd)
 					or computedWidth
@@ -784,14 +795,208 @@ function Layta.computeLayout(
 	return true
 end
 
+local rectangleShaderRaw = [[
+	float4 BORDER_RADIUS;
+
+	float fill(float sdf, float aa, float blur)
+	{
+		return smoothstep(0.5 * aa, -0.5 * aa - blur, sdf);
+	}
+
+	float stroke(float sdf, float weight, float aa, float blur)
+	{
+		return smoothstep((weight + aa) * 0.5, (weight - aa) * 0.5 - blur, sdf);
+	}
+
+	float sdRectangle(float2 position, float2 size, float4 borderRadius)
+	{
+		borderRadius.xy = (position.x > 0.0) ? borderRadius.xy : borderRadius.zw;
+		borderRadius.x = (position.y > 0.0) ? borderRadius.y : borderRadius.x;
+
+		float2 q = abs(position) - size + borderRadius.x;
+		return length(max(q, 0.0)) + min(max(q.x, q.y), 0.0) - borderRadius.x;
+	}
+
+	float4 pixel(float2 texcoord: TEXCOORD0, float4 color: COLOR0): COLOR0
+	{
+		texcoord -= 0.5;
+
+		float2 dx = ddx(texcoord);
+		float2 dy = ddy(texcoord);
+		float2 resolution = float2(length(float2(dx.x, dy.x)), length(float2(dx.y, dy.y)));
+
+		float aspectRatio = resolution.x / resolution.y;
+  	float scaleFactor = (aspectRatio <= 1.0) ? resolution.y : resolution.x;
+
+		if (aspectRatio <= 1.0)
+		{
+			texcoord.x /= aspectRatio;
+		}
+		else
+		{
+			texcoord.y *= aspectRatio;	
+		}
+
+		float4 borderRadius = BORDER_RADIUS * scaleFactor;
+
+		float2 position = texcoord;
+		float2 size = float2(1.0 / ((aspectRatio <= 1.0) ? aspectRatio : 1.0), (aspectRatio <= 1.0) ? 1.0 : aspectRatio) * 0.5;
+
+		float sdf = sdRectangle(position, size, borderRadius);
+		float aa = length(fwidth(position));
+
+		float alpha = fill(sdf, aa, 0.0);
+		color.a *= alpha;
+
+		return color;
+	}
+
+	technique rectangle
+	{
+		pass p0
+		{
+			SeparateAlphaBlendEnable = true;
+			SrcBlendAlpha = One;
+			DestBlendAlpha = InvSrcAlpha;
+			PixelShader = compile ps_2_a pixel();
+		}
+	}
+]]
+
+local function getColorAlpha(color)
+	return math.floor(color / 0x1000000) % 0x100
+end
+
 function Layta.renderer(node, px, py)
 	local computedLayout = node.computedLayout
-	local style = node.__style
+
+	local computedWidth = computedLayout.width
+	local computedHeight = computedLayout.height
 
 	local x = px + computedLayout.x
 	local y = py + computedLayout.y
 
-	dxDrawRectangle(x, y, computedLayout.width, computedLayout.height, style.backgroundColor)
+	local resolvedStyling = node.resolvedStyling
+
+	local resolvedBorderRadius = resolvedStyling.borderRadius
+	local resolvedBorderTopLeftRadius = resolvedStyling.borderTopLeftRadius
+	local resolvedBorderTopRightRadius = resolvedStyling.borderTopRightRadius
+	local resolvedBorderBottomLeftRadius = resolvedStyling.borderBottomLeftRadius
+	local resolvedBorderBottomRightRadius = resolvedStyling.borderBottomRightRadius
+
+	local renderBorderTopLeftRadius = 0
+	local renderBorderTopRightRadius = 0
+	local renderBorderBottomLeftRadius = 0
+	local renderBorderBottomRightRadius = 0
+
+	if resolvedBorderRadius.unit == "pixel" then
+		local renderBorderRadius = resolvedBorderRadius.value
+		renderBorderTopLeftRadius = renderBorderRadius
+		renderBorderTopRightRadius = renderBorderRadius
+		renderBorderBottomLeftRadius = renderBorderRadius
+		renderBorderBottomRightRadius = renderBorderRadius
+	elseif resolvedBorderRadius.unit == "percentage" then
+		local renderBorderRadius = resolvedBorderRadius.value * math.min(computedWidth, computedHeight) * 0.5
+		renderBorderTopLeftRadius = renderBorderRadius
+		renderBorderTopRightRadius = renderBorderRadius
+		renderBorderBottomLeftRadius = renderBorderRadius
+		renderBorderBottomRightRadius = renderBorderRadius
+	end
+
+	if resolvedBorderTopLeftRadius.unit == "pixel" then
+		renderBorderTopLeftRadius = resolvedBorderTopLeftRadius.value
+	elseif resolvedBorderTopLeftRadius.unit == "percentage" then
+		renderBorderTopLeftRadius = resolvedBorderTopLeftRadius.value * math.min(computedWidth, computedHeight) * 0.5
+	end
+
+	if resolvedBorderTopRightRadius.unit == "pixel" then
+		renderBorderTopRightRadius = resolvedBorderTopRightRadius.value
+	elseif resolvedBorderTopRightRadius.unit == "percentage" then
+		renderBorderTopRightRadius = resolvedBorderTopRightRadius.value * math.min(computedWidth, computedHeight) * 0.5
+	end
+
+	if resolvedBorderBottomLeftRadius.unit == "pixel" then
+		renderBorderBottomLeftRadius = resolvedBorderBottomLeftRadius.value
+	elseif resolvedBorderBottomLeftRadius.unit == "percentage" then
+		renderBorderBottomLeftRadius = resolvedBorderBottomLeftRadius.value
+			* math.min(computedWidth, computedHeight)
+			* 0.5
+	end
+
+	if resolvedBorderBottomRightRadius.unit == "pixel" then
+		renderBorderBottomRightRadius = resolvedBorderBottomRightRadius.value
+	elseif resolvedBorderBottomRightRadius.unit == "percentage" then
+		renderBorderBottomRightRadius = resolvedBorderBottomRightRadius.value
+			* math.min(computedWidth, computedHeight)
+			* 0.5
+	end
+
+	local usingRectangleShader = renderBorderTopLeftRadius > 0
+		or renderBorderTopRightRadius > 0
+		or renderBorderBottomLeftRadius > 0
+		or renderBorderBottomRightRadius > 0
+
+	local style = node.__style
+	local styleBackgroundColor = style.backgroundColor
+
+	local render = node.render
+	local renderBackgroundShader = render.backgroundShader
+
+	local hasBackground = getColorAlpha(styleBackgroundColor) > 0
+
+	if usingRectangleShader then
+		if hasBackground then
+			if renderBackgroundShader == nil then
+				renderBackgroundShader = dxCreateShader(rectangleShaderRaw)
+				render.backgroundShader = renderBackgroundShader
+			end
+		end
+
+		local previousBorderTopLeftRadius = render.borderTopLeftRadius
+		local previousBorderTopRightRadius = render.borderTopRightRadius
+		local previousBorderBottomLeftRadius = render.borderBottomLeftRadius
+		local previousBorderBottomRightRadius = render.borderBottomRightRadius
+
+		if
+			renderBorderTopLeftRadius ~= previousBorderTopLeftRadius
+			or renderBorderTopRightRadius ~= previousBorderTopRightRadius
+			or renderBorderBottomLeftRadius ~= previousBorderBottomLeftRadius
+			or renderBorderBottomRightRadius ~= previousBorderBottomRightRadius
+		then
+			render.borderTopLeftRadius = renderBorderTopLeftRadius
+			render.borderTopRightRadius = renderBorderTopRightRadius
+			render.borderBottomLeftRadius = renderBorderBottomLeftRadius
+			render.borderBottomRightRadius = renderBorderBottomRightRadius
+
+			if renderBackgroundShader and isElement(renderBackgroundShader) then
+				dxSetShaderValue(
+					renderBackgroundShader,
+					"BORDER_RADIUS",
+					renderBorderTopLeftRadius,
+					renderBorderTopRightRadius,
+					renderBorderBottomLeftRadius,
+					renderBorderBottomRightRadius
+				)
+			end
+		end
+	else
+		if renderBackgroundShader ~= nil then
+			if renderBackgroundShader and isElement(renderBackgroundShader) then
+				destroyElement(renderBackgroundShader)
+			end
+
+			renderBackgroundShader = nil
+			render.backgroundShader = renderBackgroundShader
+		end
+	end
+
+	if hasBackground then
+		if usingRectangleShader and renderBackgroundShader and isElement(renderBackgroundShader) then
+			dxDrawImage(x, y, computedWidth, computedHeight, renderBackgroundShader, 0, 0, 0, styleBackgroundColor)
+		else
+			dxDrawRectangle(x, y, computedWidth, computedHeight, styleBackgroundColor)
+		end
+	end
 
 	local children = node.children
 	local childCount = #children
@@ -802,13 +1007,11 @@ function Layta.renderer(node, px, py)
 end
 
 local tree = Layta.Node({
-	justifyContent = "center",
-	alignItems = "center",
-	width = 500,
-	height = 500,
-	backgroundColor = 0xff222222,
+	padding = 10,
+	borderRadius = 2,
+	backgroundColor = 0xff1c1e21,
 	children = {
-		Layta.Node({ width = "100%", height = 100, backgroundColor = 0xff553333 }),
+		Layta.Node({ borderRadius = 2, width = 100, height = 100, backgroundColor = 0xff444950 }),
 	},
 })
 
