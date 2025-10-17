@@ -425,16 +425,6 @@ local function flexSplitChildrenIntoLines(
 			math.max(flexCurrentLine[flexCrossAxisDimension], childComputedCrossSize)
 		flexCurrentLine.remainingFreeSpace = flexContainerMainInnerSize - flexCurrentLine[flexMainAxisDimension]
 
-		if node.style.debug then
-			print(
-				i,
-				childComputedFlexBasis,
-				flexMainAxisPosition,
-				flexMainAxisDimension,
-				flexCurrentLine[flexMainAxisPosition] + flexCurrentLine[flexMainAxisDimension]
-			)
-		end
-
 		flexLinesMainMaximumSize = math.max(
 			flexLinesMainMaximumSize,
 			flexCurrentLine[flexMainAxisPosition] + flexCurrentLine[flexMainAxisDimension]
