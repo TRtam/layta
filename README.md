@@ -1,3 +1,5 @@
+![Layta](https://github.com/TRtam/Layta/blob/main/logo.png?raw=true)
+
 # Layta
 Layta is a embeddable modern flexbox-based layout engine and dxGUI framework designed to simplify interface development. It provides a comprehensive toolkit for building responsive, visually consistent user interfaces with minimal complexity. Layta streamlines layout management and component design, empowering developers to create modern applications efficiently and elegantly.
 
