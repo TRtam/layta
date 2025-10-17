@@ -104,6 +104,12 @@ local function createStyle()
 		borderBottomLeftRadius = "auto",
 		borderBottomRightRadius = "auto",
 		backgroundColor = 0x00ffffff,
+		strokeColor = 0xff000000,
+		strokeWeight = 1,
+		strokeLeftWeight = "auto",
+		strokeTopWeight = "auto",
+		strokeRightWeight = "auto",
+		strokeBottomWeight = "auto",
 	}
 end
 
@@ -127,11 +133,16 @@ function Layta.Node:constructor(attributes)
 		paddingBottom = { value = 0, unit = "auto" },
 		width = { value = 0, unit = "auto" },
 		height = { value = 0, unit = "auto" },
-		borderRadius = { value = 0, unit = "pixel" },
+		borderRadius = { value = 0, unit = "auto" },
 		borderTopLeftRadius = { value = 0, unit = "auto" },
 		borderTopRightRadius = { value = 0, unit = "auto" },
 		borderBottomLeftRadius = { value = 0, unit = "auto" },
 		borderBottomRightRadius = { value = 0, unit = "auto" },
+		strokeWeight = { value = 1, unit = "pixel" },
+		strokeLeftWeight = { value = 0, unit = "auto" },
+		strokeTopWeight = { value = 0, unit = "auto" },
+		strokeRightWeight = { value = 0, unit = "auto" },
+		strokeBottomWeight = { value = 0, unit = "auto" },
 	}
 	self.__style = createStyle()
 	self.style = createProxy(self.__style, function(key, value)
@@ -797,6 +808,7 @@ end
 
 local rectangleShaderRaw = [[
 	float4 BORDER_RADIUS;
+	float4 STROKE_WEIGHT;
 
 	float fill(float sdf, float aa, float blur)
 	{
@@ -805,7 +817,7 @@ local rectangleShaderRaw = [[
 
 	float stroke(float sdf, float weight, float aa, float blur)
 	{
-		return smoothstep((weight + aa) * 0.5, (weight - aa) * 0.5 - blur, sdf);
+		return smoothstep((weight + aa) * 0.5, (weight - aa) * 0.5 - blur, abs(sdf));
 	}
 
 	float sdRectangle(float2 position, float2 size, float4 borderRadius)
@@ -838,6 +850,7 @@ local rectangleShaderRaw = [[
 		}
 
 		float4 borderRadius = BORDER_RADIUS * scaleFactor;
+		float4 strokeWeight = STROKE_WEIGHT * scaleFactor;
 
 		float2 position = texcoord;
 		float2 size = float2(1.0 / ((aspectRatio <= 1.0) ? aspectRatio : 1.0), (aspectRatio <= 1.0) ? 1.0 : aspectRatio) * 0.5;
@@ -845,7 +858,7 @@ local rectangleShaderRaw = [[
 		float sdf = sdRectangle(position, size, borderRadius);
 		float aa = length(fwidth(position));
 
-		float alpha = fill(sdf, aa, 0.0);
+		float alpha = any(strokeWeight) ? stroke(sdf, strokeWeight.x, aa, 0.0) : fill(sdf, aa, 0.0);
 		color.a *= alpha;
 
 		return color;
@@ -931,6 +944,41 @@ function Layta.renderer(node, px, py)
 			* 0.5
 	end
 
+	local resolvedStrokeWeight = resolvedStyling.strokeWeight
+	local resolvedStrokeLeftWeight = resolvedStyling.strokeLeftWeight
+	local resolvedStrokeTopWeight = resolvedStyling.strokeTopWeight
+	local resolvedStrokeRightWeight = resolvedStyling.strokeRightWeight
+	local resolvedStrokeBottomWeight = resolvedStyling.strokeBottomWeight
+
+	local renderStrokeLeftWeight = 0
+	local renderStrokeTopWeight = 0
+	local renderStrokeRightWeight = 0
+	local renderStrokeBottomWeight = 0
+
+	if resolvedStrokeWeight.unit == "pixel" then
+		local renderStrokeWeight = resolvedStrokeWeight.value
+		renderStrokeLeftWeight = renderStrokeWeight
+		renderStrokeTopWeight = renderStrokeWeight
+		renderStrokeRightWeight = renderStrokeWeight
+		renderStrokeBottomWeight = renderStrokeWeight
+	end
+
+	if resolvedStrokeLeftWeight.unit == "pixel" then
+		renderStrokeLeftWeight = resolvedStrokeLeftWeight.value
+	end
+
+	if resolvedStrokeTopWeight.unit == "pixel" then
+		renderStrokeTopWeight = resolvedStrokeTopWeight.value
+	end
+
+	if resolvedStrokeRightWeight.unit == "pixel" then
+		renderStrokeRightWeight = resolvedStrokeRightWeight.value
+	end
+
+	if resolvedStrokeBottomWeight.unit == "pixel" then
+		renderStrokeBottomWeight = resolvedStrokeBottomWeight.value
+	end
+
 	local usingRectangleShader = renderBorderTopLeftRadius > 0
 		or renderBorderTopRightRadius > 0
 		or renderBorderBottomLeftRadius > 0
@@ -938,17 +986,34 @@ function Layta.renderer(node, px, py)
 
 	local style = node.__style
 	local styleBackgroundColor = style.backgroundColor
+	local styleStrokeColor = style.strokeColor
 
 	local render = node.render
-	local renderBackgroundShader = render.backgroundShader
 
+	local renderBackgroundShader = render.backgroundShader
 	local hasBackground = getColorAlpha(styleBackgroundColor) > 0
+
+	local renderStrokeShader = render.strokeShader
+	local hasStroke = getColorAlpha(styleStrokeColor) > 0
+		and (
+			renderStrokeLeftWeight > 0
+			or renderStrokeTopWeight > 0
+			or renderStrokeRightWeight > 0
+			or renderStrokeBottomWeight > 0
+		)
 
 	if usingRectangleShader then
 		if hasBackground then
 			if renderBackgroundShader == nil then
 				renderBackgroundShader = dxCreateShader(rectangleShaderRaw)
 				render.backgroundShader = renderBackgroundShader
+			end
+		end
+
+		if hasStroke then
+			if renderStrokeShader == nil then
+				renderStrokeShader = dxCreateShader(rectangleShaderRaw)
+				render.strokeShader = renderStrokeShader
 			end
 		end
 
@@ -978,6 +1043,45 @@ function Layta.renderer(node, px, py)
 					renderBorderBottomRightRadius
 				)
 			end
+
+			if renderStrokeShader and isElement(renderStrokeShader) then
+				dxSetShaderValue(
+					renderStrokeShader,
+					"BORDER_RADIUS",
+					renderBorderTopLeftRadius,
+					renderBorderTopRightRadius,
+					renderBorderBottomLeftRadius,
+					renderBorderBottomRightRadius
+				)
+			end
+		end
+
+		local previousStrokeLeftWeight = render.strokeLeftWeight
+		local previousStrokeTopWeight = render.strokeTopWeight
+		local previousStrokeRightWeight = render.strokeRightWeight
+		local previousStrokeBottomWeight = render.strokeBottomWeight
+
+		if
+			renderStrokeLeftWeight ~= previousStrokeLeftWeight
+			or renderStrokeTopWeight ~= previousStrokeTopWeight
+			or renderStrokeRightWeight ~= previousStrokeRightWeight
+			or renderStrokeBottomWeight ~= previousStrokeBottomWeight
+		then
+			render.strokeLeftWeight = renderStrokeLeftWeight
+			render.strokeTopWeight = renderStrokeTopWeight
+			render.strokeRightWeight = renderStrokeRightWeight
+			render.strokeBottomWeight = renderStrokeBottomWeight
+
+			if renderStrokeShader and isElement(renderStrokeShader) then
+				dxSetShaderValue(
+					renderStrokeShader,
+					"STROKE_WEIGHT",
+					renderStrokeLeftWeight,
+					renderStrokeTopWeight,
+					renderStrokeRightWeight,
+					renderStrokeBottomWeight
+				)
+			end
 		end
 	else
 		if renderBackgroundShader ~= nil then
@@ -998,6 +1102,29 @@ function Layta.renderer(node, px, py)
 		end
 	end
 
+	if hasStroke then
+		if usingRectangleShader and renderStrokeShader and isElement(renderStrokeShader) then
+			dxDrawImage(x, y, computedWidth, computedHeight, renderStrokeShader, 0, 0, 0, styleStrokeColor)
+		else
+			dxDrawRectangle(x, y, renderStrokeLeftWeight, computedHeight, styleStrokeColor)
+			dxDrawRectangle(x, y, computedWidth, renderStrokeTopWeight, styleStrokeColor)
+			dxDrawRectangle(
+				x + computedWidth - renderStrokeRightWeight,
+				y,
+				renderStrokeRightWeight,
+				computedHeight,
+				styleStrokeColor
+			)
+			dxDrawRectangle(
+				x,
+				y + computedHeight - renderStrokeBottomWeight,
+				computedWidth,
+				renderStrokeBottomWeight,
+				styleStrokeColor
+			)
+		end
+	end
+
 	local children = node.children
 	local childCount = #children
 
@@ -1010,8 +1137,15 @@ local tree = Layta.Node({
 	padding = 10,
 	borderRadius = 2,
 	backgroundColor = 0xff1c1e21,
+	strokeColor = 0xff444950,
 	children = {
-		Layta.Node({ borderRadius = 2, width = 100, height = 100, backgroundColor = 0xff444950 }),
+		Layta.Node({
+			borderRadius = 2,
+			width = 100,
+			height = 100,
+			backgroundColor = 0xff444950,
+			strokeColor = 0xff606770,
+		}),
 	},
 })
 
