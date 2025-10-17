@@ -103,13 +103,13 @@ local function createStyle()
 		borderTopRightRadius = "auto",
 		borderBottomLeftRadius = "auto",
 		borderBottomRightRadius = "auto",
-		backgroundColor = 0x00ffffff,
-		strokeColor = 0xff000000,
 		strokeWeight = 1,
 		strokeLeftWeight = "auto",
 		strokeTopWeight = "auto",
 		strokeRightWeight = "auto",
 		strokeBottomWeight = "auto",
+		backgroundColor = 0x00ffffff,
+		strokeColor = 0xff000000,
 	}
 end
 
@@ -117,9 +117,13 @@ Layta.Node = createClass()
 
 function Layta.Node:constructor(attributes)
 	self.parent = false
+
 	self.index = false
+
 	self.children = {}
+
 	self.dirty = true
+
 	self.resolvedStyling = {
 		flexGrow = { value = 0, unit = "pixel" },
 		flexShrink = { value = 0, unit = "pixel" },
@@ -144,7 +148,9 @@ function Layta.Node:constructor(attributes)
 		strokeRightWeight = { value = 0, unit = "auto" },
 		strokeBottomWeight = { value = 0, unit = "auto" },
 	}
+
 	self.__style = createStyle()
+
 	self.style = createProxy(self.__style, function(key, value)
 		local resolvedStyle = self.resolvedStyling[key]
 		if resolvedStyle then
@@ -152,15 +158,27 @@ function Layta.Node:constructor(attributes)
 		end
 		self:markDirty()
 	end)
-	self.computedLayout = { width = 0, height = 0, x = 0, y = 0, flexContainerMainSize = 0, flexContainerCrossSize = 0 }
+
+	self.computedLayout =
+		{ width = 0, height = 0, x = 0, y = 0, flexContainerMainSize = 0, flexContainerCrossSize = 0, flexBasis = 0 }
+
 	self.render = {}
+
 	if attributes then
+		local id = attributes.id
+
+		if id then
+			self:setId(id)
+		end
+
 		for key, value in pairs(attributes) do
 			if key ~= "id" and key ~= "children" then
 				self.style[key] = value
 			end
 		end
+
 		local children = attributes.children
+
 		if children then
 			for i = 1, #children do
 				self:appendChild(children[i])
@@ -227,6 +245,46 @@ function Layta.Node:markDirty()
 	end
 
 	return true
+end
+
+local nodeIds = {}
+
+function Layta.Node:setId(id)
+	if id ~= nil and type(id) ~= "string" then
+		return false
+	end
+
+	if id then
+		nodeIds[id] = self
+		nodeIds[self] = id
+	else
+		local id = nodeIds[self]
+
+		nodeIds[id] = nil
+		nodeIds[self] = nil
+	end
+
+	return true
+end
+
+function Layta.Node:getId()
+	local id = nodeIds[self]
+
+	if not id then
+		return false
+	end
+
+	return id
+end
+
+function Layta.getNodeFromId(id)
+	local node = nodeIds[id]
+
+	if not node then
+		return false
+	end
+
+	return node
 end
 
 local function flexSplitChildrenIntoLines(
@@ -329,6 +387,7 @@ local function flexSplitChildrenIntoLines(
 		end
 
 		local childComputedLayout = child.computedLayout
+		local childComputedFlexBasis = childComputedLayout.flexBasis
 		local childComputedMainSize = childComputedLayout[flexMainAxisDimension]
 		local childComputedCrossSize = childComputedLayout[flexCrossAxisDimension]
 
@@ -360,10 +419,21 @@ local function flexSplitChildrenIntoLines(
 
 		flexCurrentLine[flexMainAxisDimension] = flexCurrentLine[flexMainAxisDimension]
 			+ (#flexCurrentLine.children > 0 and i < childCount and flexMainGap or 0)
-			+ childComputedMainSize
+			+ childComputedFlexBasis
+
 		flexCurrentLine[flexCrossAxisDimension] =
 			math.max(flexCurrentLine[flexCrossAxisDimension], childComputedCrossSize)
 		flexCurrentLine.remainingFreeSpace = flexContainerMainInnerSize - flexCurrentLine[flexMainAxisDimension]
+
+		if node.style.debug then
+			print(
+				i,
+				childComputedFlexBasis,
+				flexMainAxisPosition,
+				flexMainAxisDimension,
+				flexCurrentLine[flexMainAxisPosition] + flexCurrentLine[flexMainAxisDimension]
+			)
+		end
 
 		flexLinesMainMaximumSize = math.max(
 			flexLinesMainMaximumSize,
@@ -378,11 +448,11 @@ local function flexSplitChildrenIntoLines(
 			local childComputedFlexGrow = childResolvedStyling.flexGrow.value
 			local childComputedFlexShrink = childResolvedStyling.flexShrink.value
 
-			flexCurrentLine.totalFlexGrowFactor = flexCurrentLine.totalFlexGrowFactor + childComputedFlexGrow
-			flexCurrentLine.totalFlexShrinkScaledFactor = flexCurrentLine.totalFlexShrinkScaledFactor
-				+ childComputedFlexShrink * childComputedMainSize
-
 			if childComputedFlexGrow > 0 or childComputedFlexShrink > 0 then
+				flexCurrentLine.totalFlexGrowFactor = flexCurrentLine.totalFlexGrowFactor + childComputedFlexGrow
+				flexCurrentLine.totalFlexShrinkScaledFactor = flexCurrentLine.totalFlexShrinkScaledFactor
+					+ childComputedFlexShrink * childComputedFlexBasis
+
 				if not flexThirdPassChildren then
 					flexThirdPassChildren = {}
 				end
@@ -426,24 +496,32 @@ function Layta.computeLayout(
 		computedWidth = forcedWidth
 	elseif measuredWidth then
 		computedWidth = measuredWidth
+		computedLayout.flexBasis = parentFlexIsMainAxisRow and computedWidth or computedLayout.flexBasis
 	elseif resolvedWidth.unit == "pixel" then
 		computedWidth = resolvedWidth.value
+		computedLayout.flexBasis = parentFlexIsMainAxisRow and computedWidth or computedLayout.flexBasis
 	elseif resolvedWidth.unit == "percentage" and availableWidth then
 		computedWidth = resolvedWidth.value * availableWidth
+		computedLayout.flexBasis = parentFlexIsMainAxisRow and computedWidth or computedLayout.flexBasis
 	elseif resolvedWidth.unit == "auto" and not parentFlexIsMainAxisRow and parentFlexStretchItems then
 		computedWidth = availableWidth
+		computedLayout.flexBasis = parentFlexIsMainAxisRow and computedWidth or computedLayout.flexBasis
 	end
 
 	if forcedHeight then
 		computedHeight = forcedHeight
 	elseif measuredHeight then
 		computedHeight = measuredHeight
+		computedLayout.flexBasis = not parentFlexIsMainAxisRow and computedHeight or computedLayout.flexBasis
 	elseif resolvedHeight.unit == "pixel" then
 		computedHeight = resolvedHeight.value
+		computedLayout.flexBasis = not parentFlexIsMainAxisRow and computedHeight or computedLayout.flexBasis
 	elseif resolvedHeight.unit == "percentage" and availableHeight then
 		computedHeight = resolvedHeight.value * availableHeight
+		computedLayout.flexBasis = not parentFlexIsMainAxisRow and computedHeight or computedLayout.flexBasis
 	elseif resolvedHeight.unit == "auto" and parentFlexIsMainAxisRow and parentFlexStretchItems then
 		computedHeight = availableHeight
+		computedLayout.flexBasis = not parentFlexIsMainAxisRow and computedHeight or computedLayout.flexBasis
 	end
 
 	local resolvedPadding = resolvedStyling.padding
@@ -589,6 +667,7 @@ function Layta.computeLayout(
 				flexContainerMainSize = flexIsMainAxisRow and computedWidth or computedHeight
 				flexContainerMainSizeDefined = true
 				flexContainerMainInnerSize = flexLinesMainMaximumSize - flexPaddingMainStart
+				computedLayout.flexBasis = parentFlexIsMainAxisRow and computedWidth or computedHeight
 			end
 
 			if
@@ -600,7 +679,8 @@ function Layta.computeLayout(
 				computedHeight = flexIsMainAxisRow and (flexLinesCrossTotalSize + flexPaddingCrossEnd) or computedHeight
 				flexContainerCrossSize = flexIsMainAxisRow and computedHeight or computedWidth
 				flexContainerCrossSizeDefined = true
-				flexContainerMainSize = flexLinesCrossTotalSize - flexPaddingCrossStart
+				flexContainerCrossInnerSize = flexLinesCrossTotalSize - flexPaddingCrossStart
+				computedLayout.flexBasis = parentFlexIsMainAxisRow and computedWidth or computedHeight
 			end
 
 			if flexSecondPassChildren then
@@ -661,55 +741,61 @@ function Layta.computeLayout(
 
 					if flexCurrentLineRemainingFreeSpace > 0 then
 						local childResolvedStyling = child.resolvedStyling
+						local childComputedFlexGrow = childResolvedStyling.flexGrow.value
 
-						local childComputedFlexShrink = childResolvedStyling.flexShrink.value
-						local childComputedLayout = child.computedLayout
-						local childComputedMainSize = childComputedLayout[flexMainAxisDimension]
-						local childComputedCrossSize = childComputedLayout[flexCrossAxisDimension]
+						if childComputedFlexGrow > 0 then
+							local childComputedLayout = child.computedLayout
+							local childComputedMainSize = childComputedLayout.flexBasis
+							local childComputedCrossSize = childComputedLayout[flexCrossAxisDimension]
 
-						local flexGrowShrink = (childComputedFlexShrink / flexCurrentLine.totalFlexShrinkScaledFactor)
-							* flexCurrentLineRemainingFreeSpace
+							local flexGrowShrink = (childComputedFlexGrow / flexCurrentLine.totalFlexGrowFactor)
+								* flexCurrentLineRemainingFreeSpace
 
-						local forcedWidth = flexIsMainAxisRow and (childComputedMainSize + flexGrowShrink)
-							or childComputedCrossSize
-						local forcedHeight = not flexIsMainAxisRow and (childComputedMainSize + flexGrowShrink)
-							or childComputedCrossSize
+							local forcedWidth = flexIsMainAxisRow and (childComputedMainSize + flexGrowShrink)
+								or childComputedCrossSize
+							local forcedHeight = not flexIsMainAxisRow and (childComputedMainSize + flexGrowShrink)
+								or childComputedCrossSize
 
-						Layta.computeLayout(
-							child,
-							nil,
-							nil,
-							forcedWidth,
-							forcedHeight,
-							flexIsMainAxisRow,
-							flexStretchChildren
-						)
+							Layta.computeLayout(
+								child,
+								nil,
+								nil,
+								forcedWidth,
+								forcedHeight,
+								flexIsMainAxisRow,
+								flexStretchChildren
+							)
+						end
 					elseif flexCurrentLineRemainingFreeSpace < 0 then
 						local childResolvedStyling = child.resolvedStyling
-
 						local childComputedFlexShrink = childResolvedStyling.flexShrink.value
-						local childComputedLayout = child.computedLayout
-						local childComputedMainSize = childComputedLayout[flexMainAxisDimension]
-						local childComputedCrossSize = childComputedLayout[flexCrossAxisDimension]
 
-						local flexShrinkAmount = childComputedMainSize
-							* (childComputedFlexShrink / flexCurrentLine.totalFlexShrinkScaledFactor)
-							* -flexCurrentLineRemainingFreeSpace
+						if childComputedFlexShrink > 0 then
+							local childComputedLayout = child.computedLayout
+							local childComputedMainSize = childComputedLayout.flexBasis
+							local childComputedCrossSize = childComputedLayout[flexCrossAxisDimension]
 
-						local forcedWidth = flexIsMainAxisRow and (childComputedMainSize - flexShrinkAmount)
-							or childComputedCrossSize
-						local forcedHeight = not flexIsMainAxisRow and (childComputedMainSize - flexShrinkAmount)
-							or childComputedCrossSize
+							local flexShrinkAmount = childComputedMainSize
+								* (childComputedFlexShrink / flexCurrentLine.totalFlexShrinkScaledFactor)
+								* -flexCurrentLineRemainingFreeSpace
 
-						Layta.computeLayout(
-							child,
-							nil,
-							nil,
-							forcedWidth,
-							forcedHeight,
-							flexIsMainAxisRow,
-							flexStretchChildren
-						)
+							local forcedWidth = flexIsMainAxisRow
+									and math.max(childComputedMainSize - flexShrinkAmount, 0)
+								or childComputedCrossSize
+							local forcedHeight = not flexIsMainAxisRow
+									and math.max(childComputedMainSize - flexShrinkAmount, 0)
+								or childComputedCrossSize
+
+							Layta.computeLayout(
+								child,
+								nil,
+								nil,
+								forcedWidth,
+								forcedHeight,
+								flexIsMainAxisRow,
+								flexStretchChildren
+							)
+						end
 					end
 				end
 
