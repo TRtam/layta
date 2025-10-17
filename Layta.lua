@@ -292,7 +292,6 @@ local function flexSplitChildrenIntoLines(
 				)
 				and (
 					childResolvedCrossSize.unit == "auto"
-						and (not flexStretchChildren or flexContainerCrossSizeDefined)
 					or childResolvedCrossSize.unit == "fit-content"
 					or childResolvedCrossSize.unit == "pixel"
 					or childResolvedCrossSize.unit == "percentage"
@@ -300,8 +299,14 @@ local function flexSplitChildrenIntoLines(
 						and not flexContainerCrossSizeChanged
 				)
 			then
-				local availableWidth = flexIsMainAxisRow and flexContainerMainInnerSize or flexContainerCrossInnerSize
-				local availableHeight = flexIsMainAxisRow and flexContainerCrossInnerSize or flexContainerMainInnerSize
+				local availableWidth = flexIsMainAxisRow and flexContainerMainSizeDefined and flexContainerMainInnerSize
+					or not flexIsMainAxisRow and flexContainerCrossSizeDefined and flexContainerCrossInnerSize
+					or nil
+				local availableHeight = flexIsMainAxisRow
+						and flexContainerCrossSizeDefined
+						and flexContainerCrossInnerSize
+					or not flexIsMainAxisRow and flexContainerMainSizeDefined and flexContainerMainInnerSize
+					or nil
 
 				Layta.computeLayout(
 					child,
@@ -853,7 +858,7 @@ local rectangleShaderRaw = [[
 		float4 strokeWeight = STROKE_WEIGHT * scaleFactor;
 
 		float2 position = texcoord;
-		float2 size = float2(1.0 / ((aspectRatio <= 1.0) ? aspectRatio : 1.0), (aspectRatio <= 1.0) ? 1.0 : aspectRatio) * 0.5;
+		float2 size = float2(1.0 / ((aspectRatio <= 1.0) ? aspectRatio : 1.0), (aspectRatio <= 1.0) ? 1.0 : aspectRatio) * 0.5 - strokeWeight.x * 0.5;
 
 		float sdf = sdRectangle(position, size, borderRadius);
 		float aa = length(fwidth(position));
@@ -1134,17 +1139,72 @@ function Layta.renderer(node, px, py)
 end
 
 local tree = Layta.Node({
+	flexDirection = "column",
 	padding = 10,
-	borderRadius = 2,
-	backgroundColor = 0xff1c1e21,
-	strokeColor = 0xff444950,
+	gap = 10,
+	width = 500,
+	backgroundColor = 0xff222222,
 	children = {
 		Layta.Node({
-			borderRadius = 2,
-			width = 100,
-			height = 100,
-			backgroundColor = 0xff444950,
-			strokeColor = 0xff606770,
+			padding = 10,
+			borderRadius = 5,
+			backgroundColor = 0xff1c1e21,
+			strokeColor = 0xff444950,
+			gap = 10,
+			children = {
+				Layta.Node({
+					borderRadius = 5,
+					width = 100,
+					height = 100,
+					backgroundColor = 0xff444950,
+					strokeColor = 0xff606770,
+				}),
+				Layta.Node({
+					borderRadius = 5,
+					width = 100,
+					height = 100,
+					backgroundColor = 0xff444950,
+					strokeColor = 0xff606770,
+				}),
+				Layta.Node({
+					borderRadius = 5,
+					width = 100,
+					height = 100,
+					backgroundColor = 0xff444950,
+					strokeColor = 0xff606770,
+				}),
+			},
+		}),
+		Layta.Node({
+			flexDirection = "column",
+			padding = 10,
+			borderRadius = 5,
+			backgroundColor = 0xff1c1e21,
+			strokeColor = 0xff444950,
+			gap = 10,
+			children = {
+				Layta.Node({
+					borderRadius = 5,
+					width = 100,
+					height = 100,
+					backgroundColor = 0xff444950,
+					strokeColor = 0xff606770,
+				}),
+				Layta.Node({
+					borderRadius = 5,
+					width = 100,
+					height = 100,
+					backgroundColor = 0xff444950,
+					strokeColor = 0xff606770,
+				}),
+				Layta.Node({
+					borderRadius = 5,
+					width = 100,
+					height = 100,
+					backgroundColor = 0xff444950,
+					strokeColor = 0xff606770,
+				}),
+			},
 		}),
 	},
 })
