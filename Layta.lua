@@ -1,1004 +1,580 @@
-Layta = {}
-
-Layta.screenWidth, Layta.screenHeight = guiGetScreenSize()
-Layta.screenScale = Layta.screenHeight / 1080
+local screenWidth, screenHeight = guiGetScreenSize()
+local screenScale = screenHeight / 1080
 
 local function createClass(super)
-	return setmetatable({
-		destroy = function(object)
-			if type(object.destructor) == "function" then
-				object:destructor()
-			end
+  local class
 
-			setmetatable(object, nil)
-		end,
-	}, {
-		__call = function(class, ...)
-			local object = setmetatable({}, { __index = class })
+  class = {}
+  class.__index = class
 
-			if type(object.constructor) == "function" then
-				object:constructor(...)
-			end
+  setmetatable(class, {
+    __call = function(_, ...)
+      local instance = setmetatable({
+        destroy = function(self, ...)
+          if self.destructor then
+            self:destructor(...)
+          end
 
-			return object
-		end,
-		__index = function(_, key)
-			return super and super[key]
-		end,
-	})
+          setmetatable(self, nil)
+        end,
+      }, class)
+
+      if instance.constructor then
+        instance:constructor(...)
+      end
+
+      return instance
+    end,
+
+    __index = function(_, key)
+      return super and super[key]
+    end,
+  })
+
+  return class
 end
 
-local function createProxy(original, onChanged)
-	return setmetatable({}, {
-		__index = function(_, key)
-			return original[key]
-		end,
-		__newindex = function(_, key, value)
-			local previous = original[key]
+local function createProxy(source, onchanged)
+  return setmetatable({}, {
+    __newindex = function(_, key, value)
+      local previous = source[key]
 
-			if value ~= previous then
-				original[key] = value
+      if value == previous then
+        return
+      end
 
-				if type(onChanged) == "function" then
-					onChanged(key, value)
-				end
-			end
-		end,
-	})
+      source[key] = value
+
+      if onchanged then
+        onchanged(key, value)
+      end
+    end,
+
+    __index = function(_, key)
+      return source[key]
+    end,
+  })
 end
 
 local function resolveLength(length)
-	if type(length) == "number" then
-		return length, "pixel"
-	elseif length == "auto" then
-		return 0, "auto"
-	elseif length == "fit-content" then
-		return 0, "fit-content"
-	elseif type(length) == "string" then
-		local _value, unit = string.match(length, "^(-?%d*%.?%d+)([%%%a]*)$")
-		local value = tonumber(_value)
-		if not value then
-			return 0, "auto"
-		elseif not unit or unit == "" then
-			return value, "pixel"
-		elseif unit == "px" then
-			return value, "pixel"
-		elseif unit == "%" then
-			return value * 0.01, "percentage"
-		elseif unit == "sw" then
-			return value * 0.01 * Layta.screenWidth, "pixel"
-		elseif unit == "sh" then
-			return value * 0.01 * Layta.screenHeight, "pixel"
-		elseif unit == "sc" then
-			return value * Layta.screenScale, "pixel"
-		end
-	else
-		return 0, "auto"
-	end
+  if type(length) == "number" then
+    return length, "pixel"
+  elseif length == "auto" then
+    return 0, "auto"
+  elseif length == "fit-content" then
+    return 0, "fit-content"
+  elseif type(length) == "string" then
+    local _value, unit = string.match(length, "^(-?%d*%.?%d+)([%%%a]*)$")
+    local value = tonumber(_value)
+    if not value then
+      return 0, "auto"
+    elseif not unit or unit == "" then
+      return value, "pixel"
+    elseif unit == "px" then
+      return value, "pixel"
+    elseif unit == "%" then
+      return value * 0.01, "percentage"
+    elseif unit == "sw" then
+      return value * 0.01 * screen_width, "pixel"
+    elseif unit == "sh" then
+      return value * 0.01 * screenHeight, "pixel"
+    elseif unit == "sc" then
+      return value * screenScale, "pixel"
+    end
+  else
+    return 0, "auto"
+  end
 end
 
-local function createStyle()
-	return {
-		alignContent = "flex-start",
-		alignItems = "stretch",
-		alignSelf = "auto",
-		backgroundColor = 0x00ffffff,
-		borderBottomLeftRadius = "auto",
-		borderBottomRightRadius = "auto",
-		borderRadius = 0,
-		borderTopLeftRadius = "auto",
-		borderTopRightRadius = "auto",
-		color = 0xffffffff,
-		columnGap = "auto",
-		display = "flex",
-		flexDirection = "row",
-		flexGrow = 0,
-		flexShrink = 0,
-		flexWrap = "nowrap",
-		font = "",
-		gap = "auto",
-		height = "auto",
-		justifyContent = "flex-start",
-		padding = "auto",
-		paddingBottom = "auto",
-		paddingLeft = "auto",
-		paddingRight = "auto",
-		paddingTop = "auto",
-		rowGap = "auto",
-		strokeBottomWeight = "auto",
-		strokeColor = 0xff000000,
-		strokeLeftWeight = "auto",
-		strokeRightWeight = "auto",
-		strokeTopWeight = "auto",
-		strokeWeight = "auto",
-		width = "auto",
-	}
+local function createAttributes()
+  return {
+    alignItems = "stretch",
+    backgroundColor = 0x00ffffff,
+    borderBottomLeftRadius = "auto",
+    borderBottomRightRadius = "auto",
+    borderRadius = "auto",
+    borderTopLeftRadius = "auto",
+    borderTopRightRadius = "auto",
+    color = 0xffffffff,
+    display = "flex",
+    flexDirection = "row",
+    flexGrow = 0,
+    flexShrink = 0,
+    flexWrap = "nowrap",
+    gap = "auto",
+    height = "auto",
+    justifyContent = "flex-start",
+    padding = "auto",
+    position = "relative",
+    strokeBottomWeight = "auto",
+    strokeColor = 0xff000000,
+    strokeLeftWeight = "auto",
+    strokeRightWeight = "auto",
+    strokeTopWeight = "auto",
+    strokeWeight = "auto",
+    visible = true,
+    width = "auto",
+  }
 end
 
-local builtInFonts = {
-	arial = true,
-	bankgothic = true,
-	beckett = true,
-	clear = true,
-	default = true,
-	["default-bold"] = true,
-	diploma = true,
-	pricedown = true,
-	sans = true,
-	unifont = true,
-}
+local Node = createClass()
 
-Layta.Node = createClass()
+function Node:constructor(attributes, ...)
+  self.parent = false
 
-function Layta.Node:constructor(attributes)
-	self.parent = false
+  self.index = false
 
-	self.index = false
+  self.children = {}
 
-	self.children = {}
+  self.resolved = {
+    borderBottomLeftRadius = {value = 0, unit = "auto"},
+    borderBottomRightRadius = {value = 0, unit = "auto"},
+    borderRadius = {value = 0, unit = "auto"},
+    borderTopLeftRadius = {value = 0, unit = "auto"},
+    borderTopRightRadius = {value = 0, unit = "auto"},
+    flexGrow = {value = 0, unit = "pixel"},
+    flexShrink = {value = 0, unit = "pixel"},
+    gap = {value = 0, unit = "auto"},
+    height = {value = 0, unit = "auto"},
+    padding = {value = 0, unit = "auto"},
+    strokeBottomWeight = {value = 0, unit = "auto"},
+    strokeLeftWeight = {value = 0, unit = "auto"},
+    strokeRightWeight = {value = 0, unit = "auto"},
+    strokeTopWeight = {value = 0, unit = "auto"},
+    strokeWeight = {value = 0, unit = "auto"},
+    width = {value = 0, unit = "auto"},
+  }
 
-	self.dirty = true
+  self.attributes = createProxy(createAttributes(), function(key, value)
+    local resolvedAttribute = self.resolved[key]
 
-	self.resolvedStyling = {
-		flexGrow = { value = 0, unit = "pixel" },
-		flexShrink = { value = 0, unit = "pixel" },
-		gap = { value = 0, unit = "auto" },
-		columnGap = { value = 0, unit = "auto" },
-		rowGap = { value = 0, unit = "auto" },
-		padding = { value = 0, unit = "auto" },
-		paddingLeft = { value = 0, unit = "auto" },
-		paddingTop = { value = 0, unit = "auto" },
-		paddingRight = { value = 0, unit = "auto" },
-		paddingBottom = { value = 0, unit = "auto" },
-		width = { value = 0, unit = "auto" },
-		height = { value = 0, unit = "auto" },
-		borderRadius = { value = 0, unit = "auto" },
-		borderTopLeftRadius = { value = 0, unit = "auto" },
-		borderTopRightRadius = { value = 0, unit = "auto" },
-		borderBottomLeftRadius = { value = 0, unit = "auto" },
-		borderBottomRightRadius = { value = 0, unit = "auto" },
-		strokeWeight = { value = 0, unit = "auto" },
-		strokeLeftWeight = { value = 0, unit = "auto" },
-		strokeTopWeight = { value = 0, unit = "auto" },
-		strokeRightWeight = { value = 0, unit = "auto" },
-		strokeBottomWeight = { value = 0, unit = "auto" },
-	}
+    if resolvedAttribute then
+      resolvedAttribute.value, resolvedAttribute.unit = resolveLength(value)
+    end
 
-	self.__style = createStyle()
+    self:markDirty()
+  end)
 
-	self.style = createProxy(self.__style, function(key, value)
-		local resolvedStyle = self.resolvedStyling[key]
+  self.computed = {flexBasis = 0, height = 0, width = 0, x = 0, y = 0,}
 
-		if resolvedStyle then
-			resolvedStyle.value, resolvedStyle.unit = resolveLength(value)
-		end
+  self.render = {}
 
-		if key == "font" then
-			self.fontElement = builtInFonts[value] and value or dxCreateFont(value, 9, false, "cleartype_natural")
-		end
+  if attributes then
+    for key, value in pairs(attributes) do
+      self.attributes[key] = value
+    end
+  end
 
-		self:markDirty()
-	end)
+  local childcount = select("#", ...)
 
-	self.computedLayout =
-		{ width = 0, height = 0, x = 0, y = 0, flexContainerMainSize = 0, flexContainerCrossSize = 0, flexBasis = 0 }
-
-	self.render = {}
-
-	if attributes then
-		local id = attributes.id
-
-		if id then
-			self:setId(id)
-		end
-
-		for key, value in pairs(attributes) do
-			if key ~= "id" and key ~= "children" then
-				self.style[key] = value
-			end
-		end
-
-		local children = attributes.children
-
-		if children then
-			for i = 1, #children do
-				self:appendChild(children[i])
-			end
-		end
-	end
+  for i = 1, childcount do
+    self:appendChild(select(i, ...))
+  end
 end
 
-function Layta.Node:destructor() end
+function Node:destructor()
 
-function Layta.Node:appendChild(child)
-	if child.parent == self then
-		return false
-	end
-
-	if child.parent then
-		child.parent:removeChild(child)
-	end
-
-	table.insert(self.children, child)
-
-	child.parent = self
-	child.index = #self.children
-	child.dirty = true
-
-	self:markDirty()
-
-	return true
 end
 
-function Layta.Node:removeChild(child)
-	if child.parent ~= self then
-		return false
-	end
+function Node:appendChild(child)
+  if child.parent == self then
+    return false
+  end
 
-	table.remove(self.children, child.index)
-	self:reIndexChildren(child.index)
+  if child.parent then
+    child.parent:removeChild(child)
+  end
 
-	child.parent = false
-	child.index = false
+  table.insert(self.children, child)
 
-	self:markDirty()
+  child.parent = self
+  child.index = #self.children
 
-	return true
+  return true
 end
 
-function Layta.Node:reIndexChildren(startAt)
-	local children = self.children
+function Node:removeChild(child)
+  if child.parent ~= self then
+    return false
+  end
 
-	for i = (startAt or 1), #children do
-		children[i].index = i
-	end
+  table.remove(self.children, child.index)
+  self:reindexChildren(child.index)
+
+  child.parent = false
+  child.index = false
+
+  return true
 end
 
-function Layta.Node:markDirty()
-	if self.dirty then
-		return false
-	end
+function Node:reindexChildren(startAt)
+  local children = self.children
 
-	self.dirty = true
-
-	if self.parent then
-		self.parent:markDirty()
-	end
-
-	return true
+  for i = startAt or 1, #children do
+    children[i].index = i
+  end
 end
 
-local nodeIds = {}
+function Node:markDirty()
+  if self.dirty then
+    return false
+  end
 
-function Layta.Node:setId(id)
-	if id ~= nil and type(id) ~= "string" then
-		return false
-	end
+  self.dirty = true
 
-	if id then
-		nodeIds[id] = self
-		nodeIds[self] = id
-	else
-		local id = nodeIds[self]
+  if self.parent then
+    self.parent:markDirty()
+  end
 
-		nodeIds[id] = nil
-		nodeIds[self] = nil
-	end
-
-	return true
+  return true
 end
 
-function Layta.Node:getId()
-	local id = nodeIds[self]
+local splitChildrenIntoLines
 
-	if not id then
-		return false
-	end
+local calculateLayout
 
-	return id
+function splitChildrenIntoLines(node, isMainAxisRow, mainAxisDimension, mainAxisPosition, crossAxisDimension, crossAxisPosition, containerMainSize, containerCrossSize, containerMainInnerSize, containerCrossInnerSize, paddingMainStart, paddingCrossStart, gapMain, gapCross, flexCanWrap, stretchChildren, children, childcount, doingSecondPass, doingThirdPass)
+  local flexLines = {{[mainAxisDimension] = 0, [mainAxisPosition] = paddingMainStart, [crossAxisDimension] = 0, [crossAxisPosition] = paddingCrossStart, remainingFreeSpace = 0, totalFlexGrowFactor = 0, totalFlexShrinkScaledFactor = 0}}
+  local currentLine = flexLines[1]
+
+  local linesMainMaximumLineSize = 0
+  local linesCrossTotalLinesSize = 0
+
+  local secondPassChildren
+  local thirdPassChildren
+
+  for i = 1, childcount do
+    local child = children[i]
+    local childResolved = child.resolved
+
+    if not doingSecondPass then
+      local availableWidth = isMainAxisRow and containerMainSize ~= nil and containerMainInnerSize or not isMainAxisRow and containerCrossSize ~= nil and containerCrossInnerSize or nil
+      local availableHeight = isMainAxisRow and containerCrossSize ~= nil and containerCrossInnerSize or not isMainAxisRow and containerMainSize ~= nil and containerMainInnerSize or nil
+
+      calculateLayout(child, availableWidth, availableHeight, nil, nil, isMainAxisRow, stretchChildren)
+
+      local childResolvedMainSize = childResolved[mainAxisDimension]
+      local childResolvedCrossSize = childResolved[crossAxisDimension]
+
+      if childResolvedMainSize.unit == "percentage" and containerMainSize == nil or childResolvedCrossSize.unit == "auto" and stretchChildren and containerCrossSize == nil then
+        if not secondPassChildren then secondPassChildren = {} end
+        table.insert(secondPassChildren, child)
+      end
+    end
+
+    local childComputed = child.computed
+    local childComputedMainSize = not doingThirdPass and childComputed.flexBasis or childComputed[mainAxisDimension]
+    local childComputedCrossSize = childComputed[crossAxisDimension]
+
+    if flexCanWrap and #currentLine > 1 and currentLine[mainAxisDimension] + gapMain + childComputedMainSize > containerMainInnerSize then
+      local previousLine = currentLine
+
+      currentLine = {[mainAxisDimension] = 0, [mainAxisPosition] = paddingMainStart, [crossAxisDimension] = 0, [crossAxisPosition] = gapCross + previousLine[crossAxisPosition] + previousLine[crossAxisDimension], remainingFreeSpace = 0, totalFlexGrowFactor = 0, totalFlexShrinkScaledFactor = 0}
+
+      table.insert(flexLines, currentLine)
+    end
+
+    table.insert(currentLine, child)
+
+    currentLine[mainAxisDimension] = currentLine[mainAxisDimension] + (#currentLine > 1 and i < childcount and gapMain or 0) + childComputedMainSize
+    currentLine[crossAxisDimension] = math.max(currentLine[crossAxisDimension], childComputedCrossSize)
+
+    if containerMainSize ~= nil then
+      currentLine.remainingFreeSpace = containerMainInnerSize - currentLine[mainAxisDimension]
+    end
+
+    linesMainMaximumLineSize = math.max(linesMainMaximumLineSize,
+      currentLine[mainAxisPosition] + currentLine[mainAxisDimension])
+    linesCrossTotalLinesSize = math.max(linesCrossTotalLinesSize,
+      currentLine[crossAxisPosition] + currentLine[crossAxisDimension])
+
+    local childFlexGrow = childResolved.flexGrow.value
+    local childFlexShrink = childResolved.flexShrink.value
+
+    if childFlexGrow > 0 or childFlexShrink > 0 then
+      currentLine.totalFlexGrowFactor = currentLine.totalFlexGrowFactor + childFlexGrow
+      currentLine.totalFlexShrinkScaledFactor = currentLine.totalFlexShrinkScaledFactor + childFlexShrink * childComputedMainSize
+
+      if not thirdPassChildren then thirdPassChildren = {} end
+      table.insert(thirdPassChildren, child)
+      thirdPassChildren[child] = currentLine
+    end
+  end
+
+  return flexLines, linesMainMaximumLineSize, linesCrossTotalLinesSize, secondPassChildren, thirdPassChildren
 end
 
-Layta.Text = createClass(Layta.Node)
+function calculateLayout(node, availableWidth, availableHeight, forcedWidth, forcedHeight, parentIsMainAxisRow, parentStretchChildren)
+  local resolved = node.resolved
+  local resolvedWidth = resolved.width
+  local resolvedHeight = resolved.height
 
-function Layta.Text:constructor(attributes)
-	Layta.Node.constructor(self, attributes)
+  local computed = node.computed
+  local computedWidth
+  local computedHeight
 
-	local value = attributes.value
-	self.value = type(value) == "string" and value or ""
+  if forcedWidth then
+    computedWidth = forcedWidth
+  elseif resolvedWidth.unit == "pixel" then
+    computedWidth = resolvedWidth.value
+    computed.flexBasis = parentIsMainAxisRow and computedWidth or computed.flexBasis
+  elseif resolvedWidth.unit == "percentage" and availableWidth then
+    computedWidth = resolvedWidth.value * availableWidth
+    computed.flexBasis = parentIsMainAxisRow and computedWidth or computed.flexBasis
+  elseif resolvedWidth.unit == "auto" and not parentIsMainAxisRow and parentStretchChildren and availableWidth then
+    computedWidth = availableWidth
+    computed.flexBasis = parentIsMainAxisRow and computedWidth or computed.flexBasis
+  end
 
-	self.fontElement = "default"
+  if forcedHeight then
+    computedHeight = forcedHeight
+  elseif resolvedHeight.unit == "pixel" then
+    computedHeight = resolvedHeight.value
+    computed.flexBasis = not parentIsMainAxisRow and computedHeight or computed.flexBasis
+  elseif resolvedHeight.unit == "percentage" and availableHeight then
+    computedHeight = resolvedHeight.value * availableHeight
+    computed.flexBasis = not parentIsMainAxisRow and computedHeight or computed.flexBasis
+  elseif resolvedHeight.unit == "auto" and parentIsMainAxisRow and parentStretchChildren and availableHeight then
+    computedHeight = availableHeight
+    computed.flexBasis = not parentIsMainAxisRow and computedHeight or computed.flexBasis
+  end
+
+  local attributes = node.attributes
+
+  local flexDirection = attributes.flexDirection
+  local isMainAxisRow = flexDirection == "row" or flexDirection == "row-reverse"
+
+  local mainAxisDimension = isMainAxisRow and "width" or "height"
+  local mainAxisPosition = isMainAxisRow and "x" or "y"
+
+  local crossAxisDimension = isMainAxisRow and "height" or "width"
+  local crossAxisPosition = isMainAxisRow and "y" or "x"
+
+  local resolvedPadding = resolved.padding
+  local computedPadding = resolvedPadding.value
+
+  local paddingMainStart = computedPadding
+  local paddingMainEnd = computedPadding
+
+  local paddingCrossStart = computedPadding
+  local paddingCrossEnd = computedPadding
+
+  local containerMainSize = isMainAxisRow and computedWidth or not isMainAxisRow and computedHeight or nil
+  local containerMainInnerSize = math.max((containerMainSize or 0) - paddingMainStart - paddingMainEnd, 0)
+
+  local containerCrossSize = isMainAxisRow and computedHeight or not isMainAxisRow and computedWidth or nil
+  local containerCrossInnerSize = math.max((containerCrossSize or 0) - paddingCrossStart - paddingCrossEnd, 0)
+
+  local flexWrap = attributes.flexWrap
+  local flexCanWrap = flexWrap ~= "nowrap" and containerMainSize ~= nil
+
+  local justifyContent = attributes.justifyContent
+
+  local alignItems = attributes.alignItems
+  local stretchChildren = alignItems == "stretch"
+
+  local resolvedGap = resolved.gap
+  local computedGap = resolvedGap.value
+
+  local gapMain = computedGap
+  local gapCross = computedGap
+
+  local children = node.children
+  local childcount = #children
+
+  if childcount > 0 then
+    local flexLines, linesMainMaximumLineSize, linesCrossTotalLinesSize, secondPassChildren, thirdPassChildren = splitChildrenIntoLines(node, isMainAxisRow, mainAxisDimension, mainAxisPosition, crossAxisDimension, crossAxisPosition, containerMainSize, containerCrossSize, containerMainInnerSize, containerCrossInnerSize, paddingMainStart, paddingCrossStart, gapMain, gapCross, flexCanWrap, stretchChildren, children, childcount, false, false)
+
+    local resolvedMainSize = isMainAxisRow and resolvedWidth or resolvedHeight
+    local resolvedCrossSize = isMainAxisRow and resolvedHeight or resolvedWidth
+
+    if containerMainSize == nil and (resolvedMainSize.unit == "auto" or resolvedMainSize.unit == "fit-content") then
+      computedWidth = isMainAxisRow and (linesMainMaximumLineSize + paddingMainEnd) or computedWidth
+      computedHeight = not isMainAxisRow and (linesMainMaximumLineSize + paddingMainEnd) or computedHeight
+
+      computed.flexBasis = parentIsMainAxisRow and computedWidth or computed.flexBasis
+
+      containerMainSize = isMainAxisRow and computedWidth or computedHeight
+      containerMainInnerSize = math.max(containerMainSize - paddingMainStart - paddingMainEnd, 0)
+    end
+
+    if resolvedCrossSize.unit == "auto" or resolvedCrossSize.unit == "fit-content" then
+      computedWidth = not isMainAxisRow and (linesCrossTotalLinesSize + paddingCrossEnd) or computedWidth
+      computedHeight = isMainAxisRow and (linesCrossTotalLinesSize + paddingCrossEnd) or computedHeight
+
+      computed.flexBasis = not parentIsMainAxisRow and computedHeight or computed.flexBasis
+
+      containerCrossSize = isMainAxisRow and computedHeight or computedWidth
+      containerCrossInnerSize = math.max(containerCrossSize - paddingCrossStart - paddingCrossEnd, 0)
+    end
+
+    if not parentIsMainAxisRow and parentStretchChildren and resolvedWidth.unit == "auto" and availableWidth then
+      computedWidth = math.max(computedWidth, availableWidth)
+    elseif parentIsMainAxisRow and parentStretchChildren and resolvedHeight.unit == "auto" and availableHeight then
+      computedHeight = math.max(computedHeight, availableHeight)
+    end
+
+    if secondPassChildren then
+      for i = 1, #secondPassChildren do
+        local child = secondPassChildren[i]
+
+        local availableWidth = isMainAxisRow and containerMainSize ~= nil and containerMainInnerSize or not isMainAxisRow and containerCrossSize ~= nil and containerCrossInnerSize
+        local availableHeight = isMainAxisRow and containerCrossSize ~= nil and containerCrossInnerSize or not isMainAxisRow and containerMainSize ~= nil and containerMainInnerSize
+
+        calculateLayout(child, availableWidth, availableHeight, nil, nil, isMainAxisRow, stretchChildren)
+      end
+
+      flexLines, _, linesCrossTotalLinesSize, _, thirdPassChildren = splitChildrenIntoLines(node, isMainAxisRow, mainAxisDimension, mainAxisPosition, crossAxisDimension, crossAxisPosition, containerMainSize, containerCrossSize, containerMainInnerSize, containerCrossInnerSize, paddingMainStart, paddingCrossStart, gapMain, gapCross, flexCanWrap, stretchChildren, children, childcount, true, false)
+
+      if (resolvedCrossSize.unit == "auto" or resolvedCrossSize.unit == "fit-content") then
+        computedWidth = not isMainAxisRow and (linesCrossTotalLinesSize + paddingCrossEnd) or computedWidth
+        computedHeight = isMainAxisRow and (linesCrossTotalLinesSize + paddingCrossEnd) or computedHeight
+
+        computed.flexBasis = not parentIsMainAxisRow and computedHeight or computed.flexBasis
+
+        containerCrossSize = isMainAxisRow and computedHeight or computedWidth
+        containerCrossInnerSize = math.max(containerCrossSize - paddingCrossStart - paddingCrossEnd, 0)
+      end
+
+      if not parentIsMainAxisRow and parentStretchChildren and resolvedWidth.unit == "auto" and availableWidth then
+        computedWidth = math.max(computedWidth, availableWidth)
+      elseif parentIsMainAxisRow and parentStretchChildren and resolvedHeight.unit == "auto" and availableHeight then
+        computedHeight = math.max(computedHeight, availableHeight)
+      end
+    end
+
+    if thirdPassChildren then
+      for i = 1, #thirdPassChildren do
+        local child = thirdPassChildren[i]
+
+        local childResolved = child.resolved
+        local childFlexGrow = childResolved.flexGrow.value
+        local childFlexShrink = childResolved.flexShrink.value
+
+        local line = thirdPassChildren[child]
+        local lineRemainingFreeSpace = line.remainingFreeSpace
+
+        if childFlexGrow > 0 and lineRemainingFreeSpace > 0 then
+          local childComputed = child.computed
+          local childComputedMainSize = childComputed.flexBasis
+
+          local flexGrowAmount = (childFlexGrow / line.totalFlexGrowFactor) * lineRemainingFreeSpace
+
+          local availableWidth = isMainAxisRow and containerMainSize ~= nil and containerMainInnerSize or not isMainAxisRow and containerCrossSize ~= nil and containerCrossInnerSize
+          local availableHeight = isMainAxisRow and containerCrossSize ~= nil and containerCrossInnerSize or not isMainAxisRow and containerMainSize ~= nil and containerMainInnerSize
+
+          local forcedWidth = isMainAxisRow and (childComputedMainSize + flexGrowAmount) or nil
+          local forcedHeight = not isMainAxisRow and (childComputedMainSize + flexGrowAmount) or nil
+
+          calculateLayout(
+            child,
+            availableWidth,
+            availableHeight,
+            forcedWidth,
+            forcedHeight,
+            isMainAxisRow,
+            stretchChildren
+          )
+        elseif childFlexShrink > 0 and lineRemainingFreeSpace < 0 then
+          local childComputed = child.computed
+          local childComputedMainSize = childComputed.flexBasis
+
+          local flexShrinkAmount = childComputedMainSize * (childFlexShrink / line.totalFlexShrinkScaledFactor) * -lineRemainingFreeSpace
+
+          local availableWidth = isMainAxisRow and containerMainSize ~= nil and containerMainInnerSize or not isMainAxisRow and containerCrossSize ~= nil and containerCrossInnerSize
+          local availableHeight = isMainAxisRow and containerCrossSize ~= nil and containerCrossInnerSize or not isMainAxisRow and containerMainSize ~= nil and containerMainInnerSize
+
+          local forcedWidth = isMainAxisRow and math.max(childComputedMainSize - flexShrinkAmount, 0) or nil
+          local forcedHeight = not isMainAxisRow and math.max(childComputedMainSize - flexShrinkAmount, 0) or nil
+
+          calculateLayout(
+            child,
+            availableWidth,
+            availableHeight,
+            forcedWidth,
+            forcedHeight,
+            isMainAxisRow,
+            stretchChildren
+          )
+        end
+      end
+    end
+
+    for i = 1, #flexLines do
+      local currentLine = flexLines[i]
+
+      local caretMainPosition = currentLine[mainAxisPosition]
+      local caretCrossPosition = currentLine[crossAxisPosition]
+
+      for i = 1, #currentLine do
+        local child = currentLine[i]
+
+        local childComputed = child.computed
+        childComputed[mainAxisPosition] = caretMainPosition
+        childComputed[crossAxisPosition] = caretCrossPosition
+
+        caretMainPosition = caretMainPosition + childComputed[mainAxisDimension] + gapMain
+      end
+    end
+  end
+
+  computed.width = computedWidth or 0
+  computed.height = computedHeight or 0
 end
 
-function Layta.Text:appendChild() end
-
-function Layta.Text:removeChild() end
-
-function Layta.Text:reIndexChildren() end
-
-function Layta.Text:measure()
-	return dxGetTextSize(self.value, 0, 1, self.fontElement)
+local function getColorAlpha(color)
+  return math.floor(color / 0x1000000) % 0x100
 end
 
-function Layta.Text:draw(x, y, width, height, color)
-	dxDrawText(self.value, x, y, x + width, y + height, color)
+local function hue2rgb(p, q, t)
+  local tmod = t
+
+  if tmod < 0 then
+    tmod = tmod + 1
+  end
+
+  if tmod > 1 then
+    tmod = tmod - 1
+  end
+
+  if tmod < 1 / 6 then
+    return p + (q - p) * 6 * tmod
+  elseif tmod < 1 / 2 then
+    return q
+  elseif tmod < 2 / 3 then
+    return p + (q - p) * (2 / 3 - tmod) * 6
+  end
+
+  return p
 end
 
-function Layta.getNodeFromId(id)
-	local node = nodeIds[id]
+local function hsl(h, s, l, alpha)
+  local red, green, blue
 
-	if not node then
-		return false
-	end
+  if s == 0 then
+    red, green, blue = l, l, l
+  else
+    local q = (l < 0.5) and (l * (1 + s)) or (l + s - l * s)
+    local p = 2 * l - q
 
-	return node
+    local huer = h + 1 / 3
+    local hueg = h
+    local hueb = h - 1 / 3
+
+    red = hue2rgb(p, q, huer)
+    green = hue2rgb(p, q, hueg)
+    blue = hue2rgb(p, q, hueb)
+  end
+
+  local r = math.floor(red * 255 + 0.5)
+  local g = math.floor(green * 255 + 0.5)
+  local b = math.floor(blue * 255 + 0.5)
+  local a = math.floor((alpha or 1) * 255 + 0.5)
+
+  return a * 0x1000000 + r * 0x10000 + g * 0x100 + b
 end
 
-local function flexSplitChildrenIntoLines(
-	node,
-	flexIsMainAxisRow,
-	flexMainAxisDimension,
-	flexMainAxisPosition,
-	flexCrossAxisDimension,
-	flexCrossAxisPosition,
-	flexPaddingMainStart,
-	flexPaddingCrossStart,
-	flexContainerMainSizeDefined,
-	flexContainerMainSizeChanged,
-	flexContainerMainInnerSize,
-	flexContainerCrossSizeDefined,
-	flexContainerCrossSizeChanged,
-	flexContainerCrossInnerSize,
-	flexCanWrap,
-	flexStretchChildren,
-	flexMainGap,
-	flexCrossGap,
-	children,
-	childCount,
-	doingSecondPass,
-	doingThirdPass
-)
-	local flexLines = {
-		{
-			children = {},
-			[flexMainAxisDimension] = 0,
-			[flexCrossAxisDimension] = 0,
-			[flexMainAxisPosition] = flexPaddingMainStart,
-			[flexCrossAxisPosition] = flexPaddingCrossStart,
-			remainingFreeSpace = 0,
-			totalFlexGrowFactor = 0,
-			totalFlexShrinkScaledFactor = 0,
-		},
-	}
-	local flexCurrentLine = flexLines[1]
-
-	local flexLinesMainMaximumSize = 0
-	local flexLinesCrossTotalSize = 0
-
-	local flexSecondPassChildren
-	local flexThirdPassChildren
-
-	for i = 1, childCount do
-		local child = children[i]
-
-		local childResolvedStyling = child.resolvedStyling
-		local childResolvedMainSize = childResolvedStyling[flexMainAxisDimension]
-		local childResolvedCrossSize = childResolvedStyling[flexCrossAxisDimension]
-
-		if not doingSecondPass then
-			if
-				(
-					childResolvedMainSize.unit == "auto"
-					or childResolvedMainSize.unit == "fit-content"
-					or childResolvedMainSize.unit == "pixel"
-					or childResolvedMainSize.unit == "percentage"
-						and flexContainerMainSizeDefined
-						and not flexContainerMainSizeChanged
-				)
-				and (
-					childResolvedCrossSize.unit == "auto"
-					or childResolvedCrossSize.unit == "fit-content"
-					or childResolvedCrossSize.unit == "pixel"
-					or childResolvedCrossSize.unit == "percentage"
-						and flexContainerCrossSizeDefined
-						and not flexContainerCrossSizeChanged
-				)
-			then
-				local availableWidth = flexIsMainAxisRow and flexContainerMainSizeDefined and flexContainerMainInnerSize
-					or not flexIsMainAxisRow and flexContainerCrossSizeDefined and flexContainerCrossInnerSize
-					or nil
-				local availableHeight = flexIsMainAxisRow
-						and flexContainerCrossSizeDefined
-						and flexContainerCrossInnerSize
-					or not flexIsMainAxisRow and flexContainerMainSizeDefined and flexContainerMainInnerSize
-					or nil
-
-				Layta.computeLayout(
-					child,
-					availableWidth,
-					availableHeight,
-					nil,
-					nil,
-					flexIsMainAxisRow,
-					flexStretchChildren
-				)
-			else
-				child.dirty = true
-
-				if not flexSecondPassChildren then
-					flexSecondPassChildren = {}
-				end
-
-				table.insert(flexSecondPassChildren, child)
-			end
-		end
-
-		local childComputedLayout = child.computedLayout
-		local childComputedFlexBasis = childComputedLayout.flexBasis
-		local childComputedMainSize = childComputedLayout[flexMainAxisDimension]
-		local childComputedCrossSize = childComputedLayout[flexCrossAxisDimension]
-
-		if
-			flexCanWrap
-			and #flexCurrentLine.children > 0
-			and flexCurrentLine[flexMainAxisDimension] + flexMainGap + childComputedMainSize
-				> flexContainerMainInnerSize
-		then
-			local flexPreviousLine = flexCurrentLine
-
-			flexCurrentLine = {
-				children = {},
-				[flexMainAxisDimension] = 0,
-				[flexCrossAxisDimension] = 0,
-				[flexMainAxisPosition] = flexPaddingMainStart,
-				[flexCrossAxisPosition] = flexPreviousLine[flexCrossAxisPosition]
-					+ flexPreviousLine[flexCrossAxisDimension]
-					+ flexCrossGap,
-				remainingFreeSpace = 0,
-				totalFlexGrowFactor = 0,
-				totalFlexShrinkScaledFactor = 0,
-			}
-
-			table.insert(flexLines, flexCurrentLine)
-		end
-
-		table.insert(flexCurrentLine.children, child)
-
-		flexCurrentLine[flexMainAxisDimension] = flexCurrentLine[flexMainAxisDimension]
-			+ (#flexCurrentLine.children > 0 and i < childCount and flexMainGap or 0)
-			+ childComputedFlexBasis
-
-		flexCurrentLine[flexCrossAxisDimension] =
-			math.max(flexCurrentLine[flexCrossAxisDimension], childComputedCrossSize)
-		flexCurrentLine.remainingFreeSpace = flexContainerMainInnerSize - flexCurrentLine[flexMainAxisDimension]
-
-		flexLinesMainMaximumSize = math.max(
-			flexLinesMainMaximumSize,
-			flexCurrentLine[flexMainAxisPosition] + flexCurrentLine[flexMainAxisDimension]
-		)
-		flexLinesCrossTotalSize = math.max(
-			flexLinesCrossTotalSize,
-			flexCurrentLine[flexCrossAxisPosition] + flexCurrentLine[flexCrossAxisDimension]
-		)
-
-		if not doingThirdPass then
-			local childComputedFlexGrow = childResolvedStyling.flexGrow.value
-			local childComputedFlexShrink = childResolvedStyling.flexShrink.value
-
-			if childComputedFlexGrow > 0 or childComputedFlexShrink > 0 then
-				flexCurrentLine.totalFlexGrowFactor = flexCurrentLine.totalFlexGrowFactor + childComputedFlexGrow
-				flexCurrentLine.totalFlexShrinkScaledFactor = flexCurrentLine.totalFlexShrinkScaledFactor
-					+ childComputedFlexShrink * childComputedFlexBasis
-
-				if not flexThirdPassChildren then
-					flexThirdPassChildren = {}
-				end
-
-				table.insert(flexThirdPassChildren, child)
-				flexThirdPassChildren[child] = flexCurrentLine
-			end
-		end
-	end
-
-	return flexLines, flexLinesMainMaximumSize, flexLinesCrossTotalSize, flexSecondPassChildren, flexThirdPassChildren
-end
-
-function Layta.computeLayout(
-	node,
-	availableWidth,
-	availableHeight,
-	forcedWidth,
-	forcedHeight,
-	parentFlexIsMainAxisRow,
-	parentFlexStretchItems
-)
-	if not node.dirty then
-		return false
-	end
-
-	node.dirty = false
-
-	local computedLayout = node.computedLayout
-	local computedWidth
-	local computedHeight
-
-	local resolvedStyling = node.resolvedStyling
-	local resolvedWidth = resolvedStyling.width
-	local resolvedHeight = resolvedStyling.height
-
-	if forcedWidth then
-		computedWidth = forcedWidth
-	elseif resolvedWidth.unit == "pixel" then
-		computedWidth = resolvedWidth.value
-		computedLayout.flexBasis = parentFlexIsMainAxisRow and computedWidth or computedLayout.flexBasis
-	elseif resolvedWidth.unit == "percentage" and availableWidth then
-		computedWidth = resolvedWidth.value * availableWidth
-		computedLayout.flexBasis = parentFlexIsMainAxisRow and computedWidth or computedLayout.flexBasis
-	elseif resolvedWidth.unit == "auto" and not parentFlexIsMainAxisRow and parentFlexStretchItems then
-		computedWidth = availableWidth
-		computedLayout.flexBasis = parentFlexIsMainAxisRow and computedWidth or computedLayout.flexBasis
-	end
-
-	if forcedHeight then
-		computedHeight = forcedHeight
-	elseif resolvedHeight.unit == "pixel" then
-		computedHeight = resolvedHeight.value
-		computedLayout.flexBasis = not parentFlexIsMainAxisRow and computedHeight or computedLayout.flexBasis
-	elseif resolvedHeight.unit == "percentage" and availableHeight then
-		computedHeight = resolvedHeight.value * availableHeight
-		computedLayout.flexBasis = not parentFlexIsMainAxisRow and computedHeight or computedLayout.flexBasis
-	elseif resolvedHeight.unit == "auto" and parentFlexIsMainAxisRow and parentFlexStretchItems then
-		computedHeight = availableHeight
-		computedLayout.flexBasis = not parentFlexIsMainAxisRow and computedHeight or computedLayout.flexBasis
-	end
-
-	local resolvedPadding = resolvedStyling.padding
-	local resolvedPaddingLeft = resolvedStyling.paddingLeft
-	local resolvedPaddingTop = resolvedStyling.paddingTop
-	local resolvedPaddingRight = resolvedStyling.paddingRight
-	local resolvedPaddingBottom = resolvedStyling.paddingBottom
-
-	local computedPaddingLeft = 0
-	local computedPaddingTop = 0
-	local computedPaddingRight = 0
-	local computedPaddingBottom = 0
-
-	if resolvedPadding.unit == "pixel" then
-		local computedPadding = resolvedPadding.value
-		computedPaddingLeft = computedPadding
-		computedPaddingTop = computedPadding
-		computedPaddingRight = computedPadding
-		computedPaddingBottom = computedPadding
-	end
-
-	if resolvedPaddingLeft.unit == "pixel" then
-		computedPaddingLeft = resolvedPaddingLeft.value
-	end
-
-	if resolvedPaddingTop.unit == "pixel" then
-		computedPaddingTop = resolvedPaddingTop.value
-	end
-
-	if resolvedPaddingRight.unit == "pixel" then
-		computedPaddingRight = resolvedPaddingRight.value
-	end
-
-	if resolvedPaddingBottom.unit == "pixel" then
-		computedPaddingBottom = resolvedPaddingBottom.value
-	end
-
-	local style = node.style
-	local styleDisplay = style.display
-
-	if styleDisplay == "flex" then
-		local flexDirection = style.flexDirection
-
-		local flexIsMainAxisRow = flexDirection == "row" or flexDirection == "row-reverse"
-		local flexMainAxisDimension = flexIsMainAxisRow and "width" or "height"
-		local flexMainAxisPosition = flexIsMainAxisRow and "x" or "y"
-		local flexCrossAxisDimension = flexIsMainAxisRow and "height" or "width"
-		local flexCrossAxisPosition = flexIsMainAxisRow and "y" or "x"
-
-		local flexPaddingMainStart = flexIsMainAxisRow and computedPaddingLeft or computedPaddingTop
-		local flexPaddingMainEnd = flexIsMainAxisRow and computedPaddingRight or computedPaddingBottom
-		local flexPaddingCrossStart = flexIsMainAxisRow and computedPaddingTop or computedPaddingLeft
-		local flexPaddingCrossEnd = flexIsMainAxisRow and computedPaddingBottom or computedPaddingRight
-
-		local flexContainerMainPreviousSize = computedLayout.flexContainerMainSize
-		local flexContainerMainSize = flexIsMainAxisRow and computedWidth
-			or not flexIsMainAxisRow and computedHeight
-			or nil
-		local flexContainerMainSizeDefined = flexContainerMainSize ~= nil
-		local flexContainerMainInnerSize =
-			math.max((flexContainerMainSize or 0) - flexPaddingMainStart - flexPaddingMainEnd, 0)
-
-		local flexContainerCrossPreviousSize = computedLayout.flexContainerCrossSize
-		local flexContainerCrossSize = flexIsMainAxisRow and computedHeight
-			or not flexIsMainAxisRow and computedWidth
-			or nil
-		local flexContainerCrossSizeDefined = flexContainerCrossSize ~= nil
-		local flexContainerCrossInnerSize =
-			math.max((flexContainerCrossSize or 0) - flexPaddingCrossStart - flexPaddingCrossEnd, 0)
-
-		local flexWrap = style.flexWrap
-		local flexCanWrap = flexWrap ~= "nowrap" and flexContainerMainSizeDefined
-
-		local flexJustifyContent = style.justifyContent
-
-		local flexAlignItems = style.alignItems
-		local flexStretchChildren = flexAlignItems == "stretch"
-
-		local resolvedGap = resolvedStyling.gap
-		local resolvedColumnGap = resolvedStyling.columnGap
-		local resolvedRowGap = resolvedStyling.rowGap
-
-		local computedColumnGap = 0
-		local computedRowGap = 0
-
-		if resolvedGap.unit == "pixel" then
-			local computedGap = resolvedGap.value
-			computedColumnGap = computedGap
-			computedRowGap = computedGap
-		end
-
-		if resolvedColumnGap.unit == "pixel" then
-			computedColumnGap = resolvedColumnGap.value
-		end
-
-		if resolvedRowGap.unit == "pixel" then
-			computedRowGap = resolvedRowGap.value
-		end
-
-		local flexMainGap = flexIsMainAxisRow and computedColumnGap or computedRowGap
-		local flexCrossGap = flexIsMainAxisRow and computedRowGap or computedColumnGap
-
-		local children = node.children
-		local childCount = #children
-
-		if childCount > 0 then
-			local flexLines, flexLinesMainMaximumSize, flexLinesCrossTotalSize, flexSecondPassChildren, flexThirdPassChildren =
-				flexSplitChildrenIntoLines(
-					node,
-					flexIsMainAxisRow,
-					flexMainAxisDimension,
-					flexMainAxisPosition,
-					flexCrossAxisDimension,
-					flexCrossAxisPosition,
-					flexPaddingMainStart,
-					flexPaddingCrossStart,
-					flexContainerMainSizeDefined,
-					flexContainerMainSize ~= flexContainerMainPreviousSize,
-					flexContainerMainInnerSize,
-					flexContainerCrossSizeDefined,
-					flexContainerCrossSize ~= flexContainerCrossPreviousSize,
-					flexContainerCrossInnerSize,
-					flexCanWrap,
-					flexStretchChildren,
-					flexMainGap,
-					flexCrossGap,
-					children,
-					childCount,
-					false,
-					false
-				)
-
-			local flexResolvedMainSize = flexIsMainAxisRow and resolvedWidth or resolvedHeight
-			local flexResolvedCrossSize = flexIsMainAxisRow and resolvedHeight or resolvedWidth
-
-			local flexContainerMainFitToContent = false
-			local flexContainerCrossFitToContent = false
-
-			if
-				not flexContainerMainSizeDefined
-				and (flexResolvedMainSize.unit == "auto" or flexResolvedMainSize.unit == "fit-content")
-			then
-				computedWidth = flexIsMainAxisRow and (flexLinesMainMaximumSize + flexPaddingMainEnd) or computedWidth
-				computedHeight = not flexIsMainAxisRow and (flexLinesMainMaximumSize + flexPaddingMainEnd)
-					or computedHeight
-				flexContainerMainSize = flexIsMainAxisRow and computedWidth or computedHeight
-				flexContainerMainSizeDefined = true
-				flexContainerMainInnerSize = flexLinesMainMaximumSize - flexPaddingMainStart
-				computedLayout.flexBasis = parentFlexIsMainAxisRow and computedWidth or computedHeight
-				flexContainerMainFitToContent = true
-			end
-
-			if
-				not flexContainerCrossSizeDefined
-				and (flexResolvedCrossSize.unit == "auto" or flexResolvedCrossSize.unit == "fit-content")
-			then
-				computedWidth = not flexIsMainAxisRow and (flexLinesCrossTotalSize + flexPaddingCrossEnd)
-					or computedWidth
-				computedHeight = flexIsMainAxisRow and (flexLinesCrossTotalSize + flexPaddingCrossEnd) or computedHeight
-				flexContainerCrossSize = flexIsMainAxisRow and computedHeight or computedWidth
-				flexContainerCrossSizeDefined = true
-				flexContainerCrossInnerSize = flexLinesCrossTotalSize - flexPaddingCrossStart
-				computedLayout.flexBasis = parentFlexIsMainAxisRow and computedWidth or computedHeight
-				flexContainerCrossFitToContent = true
-			end
-
-			if flexSecondPassChildren then
-				for i = 1, #flexSecondPassChildren do
-					local child = flexSecondPassChildren[i]
-
-					local availableWidth = flexIsMainAxisRow and flexContainerMainInnerSize
-						or flexContainerCrossInnerSize
-					local availableHeight = flexIsMainAxisRow and flexContainerCrossInnerSize
-						or flexContainerMainInnerSize
-
-					Layta.computeLayout(
-						child,
-						availableWidth,
-						availableHeight,
-						nil,
-						nil,
-						flexIsMainAxisRow,
-						flexStretchChildren
-					)
-				end
-
-				flexLines, flexLinesMainMaximumSize, flexLinesCrossTotalSize, _, flexThirdPassChildren =
-					flexSplitChildrenIntoLines(
-						node,
-						flexIsMainAxisRow,
-						flexMainAxisDimension,
-						flexMainAxisPosition,
-						flexCrossAxisDimension,
-						flexCrossAxisPosition,
-						flexPaddingMainStart,
-						flexPaddingCrossStart,
-						flexContainerMainSizeDefined,
-						flexContainerMainSize ~= flexContainerMainPreviousSize,
-						flexContainerMainInnerSize,
-						flexContainerCrossSizeDefined,
-						flexContainerCrossSize ~= flexContainerCrossPreviousSize,
-						flexContainerCrossInnerSize,
-						flexCanWrap,
-						flexStretchChildren,
-						flexMainGap,
-						flexCrossGap,
-						children,
-						childCount,
-						true,
-						false
-					)
-
-				if flexContainerMainFitToContent then
-					computedWidth = flexIsMainAxisRow and (flexLinesMainMaximumSize + flexPaddingMainEnd)
-						or computedWidth
-					computedHeight = not flexIsMainAxisRow and (flexLinesMainMaximumSize + flexPaddingMainEnd)
-						or computedHeight
-					flexContainerMainSize = flexIsMainAxisRow and computedWidth or computedHeight
-					flexContainerMainSizeDefined = true
-					flexContainerMainInnerSize = flexLinesMainMaximumSize - flexPaddingMainStart
-					computedLayout.flexBasis = parentFlexIsMainAxisRow and computedWidth or computedHeight
-				end
-
-				if flexContainerCrossFitToContent then
-					computedWidth = not flexIsMainAxisRow and (flexLinesCrossTotalSize + flexPaddingCrossEnd)
-						or computedWidth
-					computedHeight = flexIsMainAxisRow and (flexLinesCrossTotalSize + flexPaddingCrossEnd)
-						or computedHeight
-					flexContainerCrossSize = flexIsMainAxisRow and computedHeight or computedWidth
-					flexContainerCrossSizeDefined = true
-					flexContainerCrossInnerSize = flexLinesCrossTotalSize - flexPaddingCrossStart
-					computedLayout.flexBasis = parentFlexIsMainAxisRow and computedWidth or computedHeight
-				end
-			end
-
-			if flexThirdPassChildren then
-				for i = 1, #flexThirdPassChildren do
-					local child = flexThirdPassChildren[i]
-
-					child.dirty = true
-
-					local flexCurrentLine = flexThirdPassChildren[child]
-					local flexCurrentLineRemainingFreeSpace = flexCurrentLine.remainingFreeSpace
-
-					if flexCurrentLineRemainingFreeSpace > 0 then
-						local childResolvedStyling = child.resolvedStyling
-						local childComputedFlexGrow = childResolvedStyling.flexGrow.value
-
-						if childComputedFlexGrow > 0 then
-							local childComputedLayout = child.computedLayout
-							local childComputedMainSize = childComputedLayout.flexBasis
-							local childComputedCrossSize = childComputedLayout[flexCrossAxisDimension]
-
-							local flexGrowShrink = (childComputedFlexGrow / flexCurrentLine.totalFlexGrowFactor)
-								* flexCurrentLineRemainingFreeSpace
-
-							local forcedWidth = flexIsMainAxisRow and (childComputedMainSize + flexGrowShrink)
-								or childComputedCrossSize
-							local forcedHeight = not flexIsMainAxisRow and (childComputedMainSize + flexGrowShrink)
-								or childComputedCrossSize
-
-							Layta.computeLayout(
-								child,
-								nil,
-								nil,
-								forcedWidth,
-								forcedHeight,
-								flexIsMainAxisRow,
-								flexStretchChildren
-							)
-						end
-					elseif flexCurrentLineRemainingFreeSpace < 0 then
-						local childResolvedStyling = child.resolvedStyling
-						local childComputedFlexShrink = childResolvedStyling.flexShrink.value
-
-						if childComputedFlexShrink > 0 then
-							local childComputedLayout = child.computedLayout
-							local childComputedMainSize = childComputedLayout.flexBasis
-							local childComputedCrossSize = childComputedLayout[flexCrossAxisDimension]
-
-							local flexShrinkAmount = childComputedMainSize
-								* (childComputedFlexShrink / flexCurrentLine.totalFlexShrinkScaledFactor)
-								* -flexCurrentLineRemainingFreeSpace
-
-							local forcedWidth = flexIsMainAxisRow
-									and math.max(childComputedMainSize - flexShrinkAmount, 0)
-								or childComputedCrossSize
-							local forcedHeight = not flexIsMainAxisRow
-									and math.max(childComputedMainSize - flexShrinkAmount, 0)
-								or childComputedCrossSize
-
-							Layta.computeLayout(
-								child,
-								nil,
-								nil,
-								forcedWidth,
-								forcedHeight,
-								flexIsMainAxisRow,
-								flexStretchChildren
-							)
-						end
-					end
-				end
-
-				flexLines, flexLinesMainMaximumSize, flexLinesCrossTotalSize = flexSplitChildrenIntoLines(
-					node,
-					flexIsMainAxisRow,
-					flexMainAxisDimension,
-					flexMainAxisPosition,
-					flexCrossAxisDimension,
-					flexCrossAxisPosition,
-					flexPaddingMainStart,
-					flexPaddingCrossStart,
-					flexContainerMainSizeDefined,
-					flexContainerMainSize ~= flexContainerMainPreviousSize,
-					flexContainerMainInnerSize,
-					flexContainerCrossSizeDefined,
-					flexContainerCrossSize ~= flexContainerCrossPreviousSize,
-					flexContainerCrossInnerSize,
-					flexCanWrap,
-					flexStretchChildren,
-					flexMainGap,
-					flexCrossGap,
-					children,
-					childCount,
-					true,
-					true
-				)
-
-				if flexContainerMainFitToContent then
-					computedWidth = flexIsMainAxisRow and (flexLinesMainMaximumSize + flexPaddingMainEnd)
-						or computedWidth
-					computedHeight = not flexIsMainAxisRow and (flexLinesMainMaximumSize + flexPaddingMainEnd)
-						or computedHeight
-					flexContainerMainSize = flexIsMainAxisRow and computedWidth or computedHeight
-					flexContainerMainSizeDefined = true
-					flexContainerMainInnerSize = flexLinesMainMaximumSize - flexPaddingMainStart
-					computedLayout.flexBasis = parentFlexIsMainAxisRow and computedWidth or computedHeight
-				end
-
-				if flexContainerCrossFitToContent then
-					computedWidth = not flexIsMainAxisRow and (flexLinesCrossTotalSize + flexPaddingCrossEnd)
-						or computedWidth
-					computedHeight = flexIsMainAxisRow and (flexLinesCrossTotalSize + flexPaddingCrossEnd)
-						or computedHeight
-					flexContainerCrossSize = flexIsMainAxisRow and computedHeight or computedWidth
-					flexContainerCrossSizeDefined = true
-					flexContainerCrossInnerSize = flexLinesCrossTotalSize - flexPaddingCrossStart
-					computedLayout.flexBasis = parentFlexIsMainAxisRow and computedWidth or computedHeight
-				end
-			end
-
-			local flexLinesAlignItemsOffset = flexAlignItems == "center"
-					and (flexContainerCrossInnerSize - flexLinesCrossTotalSize) * 0.5
-				or flexAlignItems == "flex-end" and flexContainerCrossInnerSize - flexLinesCrossTotalSize
-				or 0
-
-			for i = 1, #flexLines do
-				local flexCurrentLine = flexLines[i]
-
-				local flexCurrentLineChildren = flexCurrentLine.children
-				local flexCurrentLineChildCount = #flexCurrentLineChildren
-				local flexCurrentLineCrossSize = flexCurrentLine[flexCrossAxisDimension]
-				local flexCurrentLineRemainingFreeSpace = flexCurrentLine.remainingFreeSpace
-
-				local flexCurrentLineJustifyContentGap = flexJustifyContent == "space-between"
-						and flexCurrentLineChildCount > 1
-						and flexCurrentLineRemainingFreeSpace / (flexCurrentLineChildCount - 1)
-					or flexJustifyContent == "space-around" and flexCurrentLineRemainingFreeSpace / flexCurrentLineChildCount
-					or flexJustifyContent == "space-evenly" and flexCurrentLineRemainingFreeSpace / (flexCurrentLineChildCount + 1)
-					or 0
-
-				local flexCurrentLineJustifyContentOffset = flexJustifyContent == "center"
-						and flexCurrentLineRemainingFreeSpace * 0.5
-					or flexJustifyContent == "flex-end" and flexCurrentLineRemainingFreeSpace
-					or flexJustifyContent == "space-between" and 0
-					or flexJustifyContent == "space-around" and flexCurrentLineJustifyContentGap * 0.5
-					or flexJustifyContent == "space-evenly" and flexCurrentLineJustifyContentGap
-					or 0
-
-				local flexCurrentLineCaretMainPosition = flexCurrentLine[flexMainAxisPosition]
-					+ flexCurrentLineJustifyContentOffset
-				local flexCurrentLineCaretCrossPosition = flexCurrentLine[flexCrossAxisPosition]
-					+ flexLinesAlignItemsOffset
-
-				for j = 1, flexCurrentLineChildCount do
-					local child = flexCurrentLineChildren[j]
-
-					local childStyle = child.__style
-					local childStyleAlignSelf = childStyle.alignSelf
-					if childStyleAlignSelf == "auto" then
-						childStyleAlignSelf = flexAlignItems
-					end
-
-					local childComputedLayout = child.computedLayout
-					local childComputedCrossSize = childComputedLayout[flexCrossAxisDimension]
-
-					local childCrossOffset = childStyleAlignSelf == "center"
-							and (flexCurrentLineCrossSize - childComputedCrossSize) * 0.5
-						or childStyleAlignSelf == "flex-end" and flexCurrentLineCrossSize - childComputedCrossSize
-						or 0
-
-					childComputedLayout[flexMainAxisPosition] = math.floor(flexCurrentLineCaretMainPosition + 0.5)
-					childComputedLayout[flexCrossAxisPosition] =
-						math.floor(flexCurrentLineCaretCrossPosition + childCrossOffset + 0.5)
-
-					flexCurrentLineCaretMainPosition = flexCurrentLineCaretMainPosition
-						+ (j > 0 and j < flexCurrentLineChildCount and flexMainGap or 0)
-						+ flexCurrentLineJustifyContentGap
-						+ childComputedLayout[flexMainAxisDimension]
-				end
-			end
-
-			computedLayout.flexContainerMainSize = flexContainerMainSize
-			computedLayout.flexContainerCrossSize = flexContainerCrossSize
-		else
-			local measuredWidth
-			local measuredHeight
-
-			if node.measure then
-				measuredWidth, measuredHeight = node:measure()
-			end
-
-			if
-				measuredWidth
-				and not computedWidth
-				and (resolvedWidth.unit == "auto" or resolvedHeight.unit == "fit-content")
-			then
-				computedWidth = measuredWidth + computedPaddingLeft + computedPaddingRight
-				computedLayout.flexBasis = parentFlexIsMainAxisRow and computedWidth or computedLayout.flexBasis
-			end
-
-			if
-				measuredHeight
-				and not computedHeight
-				and (resolvedHeight.unit == "auto" or resolvedHeight.unit == "fit-content")
-			then
-				computedHeight = measuredHeight + computedPaddingTop + computedPaddingBottom
-				computedLayout.flexBasis = not parentFlexIsMainAxisRow and computedHeight or computedLayout.flexBasis
-			end
-		end
-	end
-
-	computedLayout.width = math.floor((computedWidth or 0) + 0.5)
-	computedLayout.height = math.floor((computedHeight or 0) + 0.5)
-
-	return true
-end
-
-local rectangleShaderRaw = [[
+local RectangleShaderString = [[
 	float4 BORDER_RADIUS;
 	float4 STROKE_WEIGHT;
 
@@ -1038,7 +614,7 @@ local rectangleShaderRaw = [[
 		}
 		else
 		{
-			texcoord.y *= aspectRatio;	
+			texcoord.y *= aspectRatio;
 		}
 
 		float4 borderRadius = BORDER_RADIUS * scaleFactor;
@@ -1068,312 +644,268 @@ local rectangleShaderRaw = [[
 	}
 ]]
 
-local function getColorAlpha(color)
-	return math.floor(color / 0x1000000) % 0x100
+local function renderer(node, px, py, depth)
+  local computed = node.computed
+
+  local computedWidth = computed.width
+  local computedHeight = computed.height
+
+  local x = px + computed.x
+  local y = py + computed.y
+
+  local resolved = node.resolved
+
+  local resolvedBorderRadius = {value = 5, unit = "pixel"} -- resolved.borderRadius
+  local resolvedBorderTopLeftRadius = resolved.borderTopLeftRadius
+  local resolvedBorderTopRightRadius = resolved.borderTopRightRadius
+  local resolvedBorderBottomLeftRadius = resolved.borderBottomLeftRadius
+  local resolvedBorderBottomRightRadius = resolved.borderBottomRightRadius
+
+  local renderBorderTopLeftRadius = 0
+  local renderBorderTopRightRadius = 0
+  local renderBorderBottomLeftRadius = 0
+  local renderBorderBottomRightRadius = 0
+
+  if resolvedBorderRadius.unit == "pixel" then
+    local renderBorderRadius = resolvedBorderRadius.value
+    renderBorderTopLeftRadius = renderBorderRadius
+    renderBorderTopRightRadius = renderBorderRadius
+    renderBorderBottomLeftRadius = renderBorderRadius
+    renderBorderBottomRightRadius = renderBorderRadius
+  elseif resolvedBorderRadius.unit == "percentage" then
+    local renderBorderRadius = resolvedBorderRadius.value * math.min(computedWidth, computedHeight) * 0.5
+    renderBorderTopLeftRadius = renderBorderRadius
+    renderBorderTopRightRadius = renderBorderRadius
+    renderBorderBottomLeftRadius = renderBorderRadius
+    renderBorderBottomRightRadius = renderBorderRadius
+  end
+
+  if resolvedBorderTopLeftRadius.unit == "pixel" then
+    renderBorderTopLeftRadius = resolvedBorderTopLeftRadius.value
+  elseif resolvedBorderTopLeftRadius.unit == "percentage" then
+    renderBorderTopLeftRadius = resolvedBorderTopLeftRadius.value * math.min(computedWidth, computedHeight) * 0.5
+  end
+
+  if resolvedBorderTopRightRadius.unit == "pixel" then
+    renderBorderTopRightRadius = resolvedBorderTopRightRadius.value
+  elseif resolvedBorderTopRightRadius.unit == "percentage" then
+    renderBorderTopRightRadius = resolvedBorderTopRightRadius.value * math.min(computedWidth, computedHeight) * 0.5
+  end
+
+  if resolvedBorderBottomLeftRadius.unit == "pixel" then
+    renderBorderBottomLeftRadius = resolvedBorderBottomLeftRadius.value
+  elseif resolvedBorderBottomLeftRadius.unit == "percentage" then
+    renderBorderBottomLeftRadius = resolvedBorderBottomLeftRadius.value
+        * math.min(computedWidth, computedHeight)
+        * 0.5
+  end
+
+  if resolvedBorderBottomRightRadius.unit == "pixel" then
+    renderBorderBottomRightRadius = resolvedBorderBottomRightRadius.value
+  elseif resolvedBorderBottomRightRadius.unit == "percentage" then
+    renderBorderBottomRightRadius = resolvedBorderBottomRightRadius.value
+        * math.min(computedWidth, computedHeight)
+        * 0.5
+  end
+
+  local resolvedStrokeWeight = {value = 1, unit = "pixel"} -- resolved.strokeWeight
+  local resolvedStrokeLeftWeight = resolved.strokeLeftWeight
+  local resolvedStrokeTopWeight = resolved.strokeTopWeight
+  local resolvedStrokeRightWeight = resolved.strokeRightWeight
+  local resolvedStrokeBottomWeight = resolved.strokeBottomWeight
+
+  local renderStrokeLeftWeight = 0
+  local renderStrokeTopWeight = 0
+  local renderStrokeRightWeight = 0
+  local renderStrokeBottomWeight = 0
+
+  if resolvedStrokeWeight.unit == "pixel" then
+    local renderStrokeWeight = resolvedStrokeWeight.value
+    renderStrokeLeftWeight = renderStrokeWeight
+    renderStrokeTopWeight = renderStrokeWeight
+    renderStrokeRightWeight = renderStrokeWeight
+    renderStrokeBottomWeight = renderStrokeWeight
+  end
+
+  if resolvedStrokeLeftWeight.unit == "pixel" then
+    renderStrokeLeftWeight = resolvedStrokeLeftWeight.value
+  end
+
+  if resolvedStrokeTopWeight.unit == "pixel" then
+    renderStrokeTopWeight = resolvedStrokeTopWeight.value
+  end
+
+  if resolvedStrokeRightWeight.unit == "pixel" then
+    renderStrokeRightWeight = resolvedStrokeRightWeight.value
+  end
+
+  if resolvedStrokeBottomWeight.unit == "pixel" then
+    renderStrokeBottomWeight = resolvedStrokeBottomWeight.value
+  end
+
+  local usingRectangleShader = renderBorderTopLeftRadius > 0
+      or renderBorderTopRightRadius > 0
+      or renderBorderBottomLeftRadius > 0
+      or renderBorderBottomRightRadius > 0
+
+  local attributes = node.attributes
+  local backgroundColor = hsl(0, 0, 0.15 + depth * 0.05) -- attributes.backgroundColor
+  local strokeColor = hsl(0, 0, 0.2 + depth * 0.05) -- attributes.strokeColor
+  local color = attributes.color
+
+  local render = node.render
+
+  local renderBackgroundShader = render.backgroundShader
+  local hasBackground = getColorAlpha(backgroundColor) > 0
+
+  local renderStrokeShader = render.strokeShader
+  local hasStroke = getColorAlpha(strokeColor) > 0
+      and (
+        renderStrokeLeftWeight > 0
+        or renderStrokeTopWeight > 0
+        or renderStrokeRightWeight > 0
+        or renderStrokeBottomWeight > 0
+      )
+
+  if usingRectangleShader then
+    if hasBackground then
+      if renderBackgroundShader == nil then
+        renderBackgroundShader = dxCreateShader(RectangleShaderString)
+        render.backgroundShader = renderBackgroundShader
+      end
+    end
+
+    if hasStroke then
+      if renderStrokeShader == nil then
+        renderStrokeShader = dxCreateShader(RectangleShaderString)
+        render.strokeShader = renderStrokeShader
+      end
+    end
+
+    local previousBorderTopLeftRadius = render.borderTopLeftRadius
+    local previousBorderTopRightRadius = render.borderTopRightRadius
+    local previousBorderBottomLeftRadius = render.borderBottomLeftRadius
+    local previousBorderBottomRightRadius = render.borderBottomRightRadius
+
+    if
+        renderBorderTopLeftRadius ~= previousBorderTopLeftRadius
+        or renderBorderTopRightRadius ~= previousBorderTopRightRadius
+        or renderBorderBottomLeftRadius ~= previousBorderBottomLeftRadius
+        or renderBorderBottomRightRadius ~= previousBorderBottomRightRadius
+    then
+      render.borderTopLeftRadius = renderBorderTopLeftRadius
+      render.borderTopRightRadius = renderBorderTopRightRadius
+      render.borderBottomLeftRadius = renderBorderBottomLeftRadius
+      render.borderBottomRightRadius = renderBorderBottomRightRadius
+
+      if renderBackgroundShader and isElement(renderBackgroundShader) then
+        dxSetShaderValue(
+          renderBackgroundShader,
+          "BORDER_RADIUS",
+          renderBorderTopLeftRadius,
+          renderBorderTopRightRadius,
+          renderBorderBottomLeftRadius,
+          renderBorderBottomRightRadius
+        )
+      end
+
+      if renderStrokeShader and isElement(renderStrokeShader) then
+        dxSetShaderValue(
+          renderStrokeShader,
+          "BORDER_RADIUS",
+          renderBorderTopLeftRadius,
+          renderBorderTopRightRadius,
+          renderBorderBottomLeftRadius,
+          renderBorderBottomRightRadius
+        )
+      end
+    end
+
+    local previousStrokeLeftWeight = render.strokeLeftWeight
+    local previousStrokeTopWeight = render.strokeTopWeight
+    local previousStrokeRightWeight = render.strokeRightWeight
+    local previousStrokeBottomWeight = render.strokeBottomWeight
+
+    if
+        renderStrokeLeftWeight ~= previousStrokeLeftWeight
+        or renderStrokeTopWeight ~= previousStrokeTopWeight
+        or renderStrokeRightWeight ~= previousStrokeRightWeight
+        or renderStrokeBottomWeight ~= previousStrokeBottomWeight
+    then
+      render.strokeLeftWeight = renderStrokeLeftWeight
+      render.strokeTopWeight = renderStrokeTopWeight
+      render.strokeRightWeight = renderStrokeRightWeight
+      render.strokeBottomWeight = renderStrokeBottomWeight
+
+      if renderStrokeShader and isElement(renderStrokeShader) then
+        dxSetShaderValue(
+          renderStrokeShader,
+          "STROKE_WEIGHT",
+          renderStrokeLeftWeight,
+          renderStrokeTopWeight,
+          renderStrokeRightWeight,
+          renderStrokeBottomWeight
+        )
+      end
+    end
+  else
+    if renderBackgroundShader ~= nil then
+      if renderBackgroundShader and isElement(renderBackgroundShader) then
+        destroyElement(renderBackgroundShader)
+      end
+
+      renderBackgroundShader = nil
+      render.backgroundShader = renderBackgroundShader
+    end
+  end
+
+  if hasBackground then
+    if usingRectangleShader and renderBackgroundShader and isElement(renderBackgroundShader) then
+      dxDrawImage(x, y, computedWidth, computedHeight, renderBackgroundShader, 0, 0, 0, backgroundColor)
+    else
+      dxDrawRectangle(x, y, computedWidth, computedHeight, backgroundColor)
+    end
+  end
+
+  if hasStroke then
+    if usingRectangleShader and renderStrokeShader and isElement(renderStrokeShader) then
+      dxDrawImage(x, y, computedWidth, computedHeight, renderStrokeShader, 0, 0, 0, strokeColor)
+    else
+      dxDrawRectangle(x, y, renderStrokeLeftWeight, computedHeight, strokeColor)
+      dxDrawRectangle(x, y, computedWidth, renderStrokeTopWeight, strokeColor)
+      dxDrawRectangle(
+        x + computedWidth - renderStrokeRightWeight,
+        y,
+        renderStrokeRightWeight,
+        computedHeight,
+        strokeColor
+      )
+      dxDrawRectangle(
+        x,
+        y + computedHeight - renderStrokeBottomWeight,
+        computedWidth,
+        renderStrokeBottomWeight,
+        strokeColor
+      )
+    end
+  end
+
+  if node.draw and getColorAlpha(color) > 0 then
+    node:draw(x, y, computedWidth, computedHeight, color)
+  end
+
+  local children = node.children
+  local childCount = #children
+
+  for i = 1, childCount do
+    renderer(children[i], x, y, depth + 1)
+  end
 end
 
-local function HUE2RGB(p, q, t)
-	local tMod = t
+local tree = Node({padding = 20, flexWrap = "wrap", gap = 10, width = 300}, Node({width = 100, height = 100}), Node({flexGrow = 1, height = 100}), Node({width = 100, height = 100}), Node({flexShrink = 1, width = 500, height = 100,}))
 
-	if tMod < 0 then
-		tMod = tMod + 1
-	end
+calculateLayout(tree)
 
-	if tMod > 1 then
-		tMod = tMod - 1
-	end
-
-	if tMod < 1 / 6 then
-		return p + (q - p) * 6 * tMod
-	elseif tMod < 1 / 2 then
-		return q
-	elseif tMod < 2 / 3 then
-		return p + (q - p) * (2 / 3 - tMod) * 6
-	end
-
-	return p
-end
-
-function Layta.HSL(h, s, l, alpha)
-	local red, green, blue
-
-	if s == 0 then
-		red, green, blue = l, l, l
-	else
-		local q = (l < 0.5) and (l * (1 + s)) or (l + s - l * s)
-		local p = 2 * l - q
-
-		local hueR = h + 1 / 3
-		local hueG = h
-		local hueB = h - 1 / 3
-
-		red = HUE2RGB(p, q, hueR)
-		green = HUE2RGB(p, q, hueG)
-		blue = HUE2RGB(p, q, hueB)
-	end
-
-	local r = math.floor(red * 255 + 0.5)
-	local g = math.floor(green * 255 + 0.5)
-	local b = math.floor(blue * 255 + 0.5)
-	local a = math.floor((alpha or 1) * 255 + 0.5)
-
-	return a * 0x1000000 + r * 0x10000 + g * 0x100 + b
-end
-
-function Layta.renderer(node, px, py)
-	local computedLayout = node.computedLayout
-
-	local computedWidth = computedLayout.width
-	local computedHeight = computedLayout.height
-
-	local x = px + computedLayout.x
-	local y = py + computedLayout.y
-
-	local resolvedStyling = node.resolvedStyling
-
-	local resolvedBorderRadius = resolvedStyling.borderRadius
-	local resolvedBorderTopLeftRadius = resolvedStyling.borderTopLeftRadius
-	local resolvedBorderTopRightRadius = resolvedStyling.borderTopRightRadius
-	local resolvedBorderBottomLeftRadius = resolvedStyling.borderBottomLeftRadius
-	local resolvedBorderBottomRightRadius = resolvedStyling.borderBottomRightRadius
-
-	local renderBorderTopLeftRadius = 0
-	local renderBorderTopRightRadius = 0
-	local renderBorderBottomLeftRadius = 0
-	local renderBorderBottomRightRadius = 0
-
-	if resolvedBorderRadius.unit == "pixel" then
-		local renderBorderRadius = resolvedBorderRadius.value
-		renderBorderTopLeftRadius = renderBorderRadius
-		renderBorderTopRightRadius = renderBorderRadius
-		renderBorderBottomLeftRadius = renderBorderRadius
-		renderBorderBottomRightRadius = renderBorderRadius
-	elseif resolvedBorderRadius.unit == "percentage" then
-		local renderBorderRadius = resolvedBorderRadius.value * math.min(computedWidth, computedHeight) * 0.5
-		renderBorderTopLeftRadius = renderBorderRadius
-		renderBorderTopRightRadius = renderBorderRadius
-		renderBorderBottomLeftRadius = renderBorderRadius
-		renderBorderBottomRightRadius = renderBorderRadius
-	end
-
-	if resolvedBorderTopLeftRadius.unit == "pixel" then
-		renderBorderTopLeftRadius = resolvedBorderTopLeftRadius.value
-	elseif resolvedBorderTopLeftRadius.unit == "percentage" then
-		renderBorderTopLeftRadius = resolvedBorderTopLeftRadius.value * math.min(computedWidth, computedHeight) * 0.5
-	end
-
-	if resolvedBorderTopRightRadius.unit == "pixel" then
-		renderBorderTopRightRadius = resolvedBorderTopRightRadius.value
-	elseif resolvedBorderTopRightRadius.unit == "percentage" then
-		renderBorderTopRightRadius = resolvedBorderTopRightRadius.value * math.min(computedWidth, computedHeight) * 0.5
-	end
-
-	if resolvedBorderBottomLeftRadius.unit == "pixel" then
-		renderBorderBottomLeftRadius = resolvedBorderBottomLeftRadius.value
-	elseif resolvedBorderBottomLeftRadius.unit == "percentage" then
-		renderBorderBottomLeftRadius = resolvedBorderBottomLeftRadius.value
-			* math.min(computedWidth, computedHeight)
-			* 0.5
-	end
-
-	if resolvedBorderBottomRightRadius.unit == "pixel" then
-		renderBorderBottomRightRadius = resolvedBorderBottomRightRadius.value
-	elseif resolvedBorderBottomRightRadius.unit == "percentage" then
-		renderBorderBottomRightRadius = resolvedBorderBottomRightRadius.value
-			* math.min(computedWidth, computedHeight)
-			* 0.5
-	end
-
-	local resolvedStrokeWeight = resolvedStyling.strokeWeight
-	local resolvedStrokeLeftWeight = resolvedStyling.strokeLeftWeight
-	local resolvedStrokeTopWeight = resolvedStyling.strokeTopWeight
-	local resolvedStrokeRightWeight = resolvedStyling.strokeRightWeight
-	local resolvedStrokeBottomWeight = resolvedStyling.strokeBottomWeight
-
-	local renderStrokeLeftWeight = 0
-	local renderStrokeTopWeight = 0
-	local renderStrokeRightWeight = 0
-	local renderStrokeBottomWeight = 0
-
-	if resolvedStrokeWeight.unit == "pixel" then
-		local renderStrokeWeight = resolvedStrokeWeight.value
-		renderStrokeLeftWeight = renderStrokeWeight
-		renderStrokeTopWeight = renderStrokeWeight
-		renderStrokeRightWeight = renderStrokeWeight
-		renderStrokeBottomWeight = renderStrokeWeight
-	end
-
-	if resolvedStrokeLeftWeight.unit == "pixel" then
-		renderStrokeLeftWeight = resolvedStrokeLeftWeight.value
-	end
-
-	if resolvedStrokeTopWeight.unit == "pixel" then
-		renderStrokeTopWeight = resolvedStrokeTopWeight.value
-	end
-
-	if resolvedStrokeRightWeight.unit == "pixel" then
-		renderStrokeRightWeight = resolvedStrokeRightWeight.value
-	end
-
-	if resolvedStrokeBottomWeight.unit == "pixel" then
-		renderStrokeBottomWeight = resolvedStrokeBottomWeight.value
-	end
-
-	local usingRectangleShader = renderBorderTopLeftRadius > 0
-		or renderBorderTopRightRadius > 0
-		or renderBorderBottomLeftRadius > 0
-		or renderBorderBottomRightRadius > 0
-
-	local style = node.__style
-	local styleBackgroundColor = style.backgroundColor
-	local styleStrokeColor = style.strokeColor
-	local styleColor = style.color
-
-	local render = node.render
-
-	local renderBackgroundShader = render.backgroundShader
-	local hasBackground = getColorAlpha(styleBackgroundColor) > 0
-
-	local renderStrokeShader = render.strokeShader
-	local hasStroke = getColorAlpha(styleStrokeColor) > 0
-		and (
-			renderStrokeLeftWeight > 0
-			or renderStrokeTopWeight > 0
-			or renderStrokeRightWeight > 0
-			or renderStrokeBottomWeight > 0
-		)
-
-	if usingRectangleShader then
-		if hasBackground then
-			if renderBackgroundShader == nil then
-				renderBackgroundShader = dxCreateShader(rectangleShaderRaw)
-				render.backgroundShader = renderBackgroundShader
-			end
-		end
-
-		if hasStroke then
-			if renderStrokeShader == nil then
-				renderStrokeShader = dxCreateShader(rectangleShaderRaw)
-				render.strokeShader = renderStrokeShader
-			end
-		end
-
-		local previousBorderTopLeftRadius = render.borderTopLeftRadius
-		local previousBorderTopRightRadius = render.borderTopRightRadius
-		local previousBorderBottomLeftRadius = render.borderBottomLeftRadius
-		local previousBorderBottomRightRadius = render.borderBottomRightRadius
-
-		if
-			renderBorderTopLeftRadius ~= previousBorderTopLeftRadius
-			or renderBorderTopRightRadius ~= previousBorderTopRightRadius
-			or renderBorderBottomLeftRadius ~= previousBorderBottomLeftRadius
-			or renderBorderBottomRightRadius ~= previousBorderBottomRightRadius
-		then
-			render.borderTopLeftRadius = renderBorderTopLeftRadius
-			render.borderTopRightRadius = renderBorderTopRightRadius
-			render.borderBottomLeftRadius = renderBorderBottomLeftRadius
-			render.borderBottomRightRadius = renderBorderBottomRightRadius
-
-			if renderBackgroundShader and isElement(renderBackgroundShader) then
-				dxSetShaderValue(
-					renderBackgroundShader,
-					"BORDER_RADIUS",
-					renderBorderTopLeftRadius,
-					renderBorderTopRightRadius,
-					renderBorderBottomLeftRadius,
-					renderBorderBottomRightRadius
-				)
-			end
-
-			if renderStrokeShader and isElement(renderStrokeShader) then
-				dxSetShaderValue(
-					renderStrokeShader,
-					"BORDER_RADIUS",
-					renderBorderTopLeftRadius,
-					renderBorderTopRightRadius,
-					renderBorderBottomLeftRadius,
-					renderBorderBottomRightRadius
-				)
-			end
-		end
-
-		local previousStrokeLeftWeight = render.strokeLeftWeight
-		local previousStrokeTopWeight = render.strokeTopWeight
-		local previousStrokeRightWeight = render.strokeRightWeight
-		local previousStrokeBottomWeight = render.strokeBottomWeight
-
-		if
-			renderStrokeLeftWeight ~= previousStrokeLeftWeight
-			or renderStrokeTopWeight ~= previousStrokeTopWeight
-			or renderStrokeRightWeight ~= previousStrokeRightWeight
-			or renderStrokeBottomWeight ~= previousStrokeBottomWeight
-		then
-			render.strokeLeftWeight = renderStrokeLeftWeight
-			render.strokeTopWeight = renderStrokeTopWeight
-			render.strokeRightWeight = renderStrokeRightWeight
-			render.strokeBottomWeight = renderStrokeBottomWeight
-
-			if renderStrokeShader and isElement(renderStrokeShader) then
-				dxSetShaderValue(
-					renderStrokeShader,
-					"STROKE_WEIGHT",
-					renderStrokeLeftWeight,
-					renderStrokeTopWeight,
-					renderStrokeRightWeight,
-					renderStrokeBottomWeight
-				)
-			end
-		end
-	else
-		if renderBackgroundShader ~= nil then
-			if renderBackgroundShader and isElement(renderBackgroundShader) then
-				destroyElement(renderBackgroundShader)
-			end
-
-			renderBackgroundShader = nil
-			render.backgroundShader = renderBackgroundShader
-		end
-	end
-
-	if hasBackground then
-		if usingRectangleShader and renderBackgroundShader and isElement(renderBackgroundShader) then
-			dxDrawImage(x, y, computedWidth, computedHeight, renderBackgroundShader, 0, 0, 0, styleBackgroundColor)
-		else
-			dxDrawRectangle(x, y, computedWidth, computedHeight, styleBackgroundColor)
-		end
-	end
-
-	if hasStroke then
-		if usingRectangleShader and renderStrokeShader and isElement(renderStrokeShader) then
-			dxDrawImage(x, y, computedWidth, computedHeight, renderStrokeShader, 0, 0, 0, styleStrokeColor)
-		else
-			dxDrawRectangle(x, y, renderStrokeLeftWeight, computedHeight, styleStrokeColor)
-			dxDrawRectangle(x, y, computedWidth, renderStrokeTopWeight, styleStrokeColor)
-			dxDrawRectangle(
-				x + computedWidth - renderStrokeRightWeight,
-				y,
-				renderStrokeRightWeight,
-				computedHeight,
-				styleStrokeColor
-			)
-			dxDrawRectangle(
-				x,
-				y + computedHeight - renderStrokeBottomWeight,
-				computedWidth,
-				renderStrokeBottomWeight,
-				styleStrokeColor
-			)
-		end
-	end
-
-	if node.draw and getColorAlpha(styleColor) > 0 then
-		node:draw(x, y, computedWidth, computedHeight, styleColor)
-	end
-
-	local children = node.children
-	local childCount = #children
-
-	for i = 1, childCount do
-		Layta.renderer(children[i], x, y)
-	end
-end
+addEventHandler("onClientRender", root, function()
+  renderer(tree, 0, 0, 0)
+end)
