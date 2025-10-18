@@ -79,39 +79,54 @@ end
 
 local function createStyle()
 	return {
-		display = "flex",
-		flexDirection = "row",
-		flexWrap = "nowrap",
-		justifyContent = "flex-start",
 		alignContent = "flex-start",
 		alignItems = "stretch",
 		alignSelf = "auto",
-		flexGrow = 0,
-		flexShrink = 0,
-		gap = "auto",
-		columnGap = "auto",
-		rowGap = "auto",
-		padding = "auto",
-		paddingLeft = "auto",
-		paddingTop = "auto",
-		paddingRight = "auto",
-		paddingBottom = "auto",
-		width = "auto",
-		height = "auto",
+		backgroundColor = 0x00ffffff,
+		borderBottomLeftRadius = "auto",
+		borderBottomRightRadius = "auto",
 		borderRadius = 0,
 		borderTopLeftRadius = "auto",
 		borderTopRightRadius = "auto",
-		borderBottomLeftRadius = "auto",
-		borderBottomRightRadius = "auto",
-		strokeWeight = "auto",
-		strokeLeftWeight = "auto",
-		strokeTopWeight = "auto",
-		strokeRightWeight = "auto",
+		color = 0xffffffff,
+		columnGap = "auto",
+		display = "flex",
+		flexDirection = "row",
+		flexGrow = 0,
+		flexShrink = 0,
+		flexWrap = "nowrap",
+		font = "",
+		gap = "auto",
+		height = "auto",
+		justifyContent = "flex-start",
+		padding = "auto",
+		paddingBottom = "auto",
+		paddingLeft = "auto",
+		paddingRight = "auto",
+		paddingTop = "auto",
+		rowGap = "auto",
 		strokeBottomWeight = "auto",
-		backgroundColor = 0x00ffffff,
 		strokeColor = 0xff000000,
+		strokeLeftWeight = "auto",
+		strokeRightWeight = "auto",
+		strokeTopWeight = "auto",
+		strokeWeight = "auto",
+		width = "auto",
 	}
 end
+
+local builtInFonts = {
+	arial = true,
+	bankgothic = true,
+	beckett = true,
+	clear = true,
+	default = true,
+	["default-bold"] = true,
+	diploma = true,
+	pricedown = true,
+	sans = true,
+	unifont = true,
+}
 
 Layta.Node = createClass()
 
@@ -153,9 +168,15 @@ function Layta.Node:constructor(attributes)
 
 	self.style = createProxy(self.__style, function(key, value)
 		local resolvedStyle = self.resolvedStyling[key]
+
 		if resolvedStyle then
 			resolvedStyle.value, resolvedStyle.unit = resolveLength(value)
 		end
+
+		if key == "font" then
+			self.fontElement = builtInFonts[value] and value or dxCreateFont(value, 9, false, "cleartype_natural")
+		end
+
 		self:markDirty()
 	end)
 
@@ -275,6 +296,31 @@ function Layta.Node:getId()
 	end
 
 	return id
+end
+
+Layta.Text = createClass(Layta.Node)
+
+function Layta.Text:constructor(attributes)
+	Layta.Node.constructor(self, attributes)
+
+	local value = attributes.value
+	self.value = type(value) == "string" and value or ""
+
+	self.fontElement = "default"
+end
+
+function Layta.Text:appendChild() end
+
+function Layta.Text:removeChild() end
+
+function Layta.Text:reIndexChildren() end
+
+function Layta.Text:measure()
+	return dxGetTextSize(self.value, 0, 1, self.fontElement)
+end
+
+function Layta.Text:draw(x, y, width, height, color)
+	dxDrawText(self.value, x, y, x + width, y + height, color)
 end
 
 function Layta.getNodeFromId(id)
@@ -479,14 +525,8 @@ function Layta.computeLayout(
 	local resolvedWidth = resolvedStyling.width
 	local resolvedHeight = resolvedStyling.height
 
-	local measuredWidth
-	local measuredHeight
-
 	if forcedWidth then
 		computedWidth = forcedWidth
-	elseif measuredWidth then
-		computedWidth = measuredWidth
-		computedLayout.flexBasis = parentFlexIsMainAxisRow and computedWidth or computedLayout.flexBasis
 	elseif resolvedWidth.unit == "pixel" then
 		computedWidth = resolvedWidth.value
 		computedLayout.flexBasis = parentFlexIsMainAxisRow and computedWidth or computedLayout.flexBasis
@@ -500,9 +540,6 @@ function Layta.computeLayout(
 
 	if forcedHeight then
 		computedHeight = forcedHeight
-	elseif measuredHeight then
-		computedHeight = measuredHeight
-		computedLayout.flexBasis = not parentFlexIsMainAxisRow and computedHeight or computedLayout.flexBasis
 	elseif resolvedHeight.unit == "pixel" then
 		computedHeight = resolvedHeight.value
 		computedLayout.flexBasis = not parentFlexIsMainAxisRow and computedHeight or computedLayout.flexBasis
@@ -901,7 +938,7 @@ function Layta.computeLayout(
 					local child = flexCurrentLineChildren[j]
 
 					local childStyle = child.__style
-					local childStyleAlignSelf = childStyle.self_align
+					local childStyleAlignSelf = childStyle.alignSelf
 					if childStyleAlignSelf == "auto" then
 						childStyleAlignSelf = flexAlignItems
 					end
@@ -914,9 +951,9 @@ function Layta.computeLayout(
 						or childStyleAlignSelf == "flex-end" and flexCurrentLineCrossSize - childComputedCrossSize
 						or 0
 
-					childComputedLayout[flexMainAxisPosition] = math.floor(flexCurrentLineCaretMainPosition)
+					childComputedLayout[flexMainAxisPosition] = math.floor(flexCurrentLineCaretMainPosition + 0.5)
 					childComputedLayout[flexCrossAxisPosition] =
-						math.floor(flexCurrentLineCaretCrossPosition + childCrossOffset)
+						math.floor(flexCurrentLineCaretCrossPosition + childCrossOffset + 0.5)
 
 					flexCurrentLineCaretMainPosition = flexCurrentLineCaretMainPosition
 						+ (j > 0 and j < flexCurrentLineChildCount and flexMainGap or 0)
@@ -927,11 +964,36 @@ function Layta.computeLayout(
 
 			computedLayout.flexContainerMainSize = flexContainerMainSize
 			computedLayout.flexContainerCrossSize = flexContainerCrossSize
+		else
+			local measuredWidth
+			local measuredHeight
+
+			if node.measure then
+				measuredWidth, measuredHeight = node:measure()
+			end
+
+			if
+				measuredWidth
+				and not computedWidth
+				and (resolvedWidth.unit == "auto" or resolvedHeight.unit == "fit-content")
+			then
+				computedWidth = measuredWidth + computedPaddingLeft + computedPaddingRight
+				computedLayout.flexBasis = parentFlexIsMainAxisRow and computedWidth or computedLayout.flexBasis
+			end
+
+			if
+				measuredHeight
+				and not computedHeight
+				and (resolvedHeight.unit == "auto" or resolvedHeight.unit == "fit-content")
+			then
+				computedHeight = measuredHeight + computedPaddingTop + computedPaddingBottom
+				computedLayout.flexBasis = not parentFlexIsMainAxisRow and computedHeight or computedLayout.flexBasis
+			end
 		end
 	end
 
-	computedLayout.width = math.ceil(computedWidth or 0)
-	computedLayout.height = math.ceil(computedHeight or 0)
+	computedLayout.width = math.floor((computedWidth or 0) + 0.5)
+	computedLayout.height = math.floor((computedHeight or 0) + 0.5)
 
 	return true
 end
@@ -1050,10 +1112,10 @@ function Layta.HSL(h, s, l, alpha)
 		blue = HUE2RGB(p, q, hueB)
 	end
 
-	local r = math.floor(red * 255)
-	local g = math.floor(green * 255)
-	local b = math.floor(blue * 255)
-	local a = math.floor((alpha or 1) * 255)
+	local r = math.floor(red * 255 + 0.5)
+	local g = math.floor(green * 255 + 0.5)
+	local b = math.floor(blue * 255 + 0.5)
+	local a = math.floor((alpha or 1) * 255 + 0.5)
 
 	return a * 0x1000000 + r * 0x10000 + g * 0x100 + b
 end
@@ -1165,6 +1227,7 @@ function Layta.renderer(node, px, py)
 	local style = node.__style
 	local styleBackgroundColor = style.backgroundColor
 	local styleStrokeColor = style.strokeColor
+	local styleColor = style.color
 
 	local render = node.render
 
@@ -1301,6 +1364,10 @@ function Layta.renderer(node, px, py)
 				styleStrokeColor
 			)
 		end
+	end
+
+	if node.draw and getColorAlpha(styleColor) > 0 then
+		node:draw(x, y, computedWidth, computedHeight, styleColor)
 	end
 
 	local children = node.children
