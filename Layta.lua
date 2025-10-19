@@ -75,7 +75,7 @@ local function resolveLength(length)
     elseif unit == "%" then
       return value * 0.01, "percentage"
     elseif unit == "sw" then
-      return value * 0.01 * screen_width, "pixel"
+      return value * 0.01 * screenWidth, "pixel"
     elseif unit == "sh" then
       return value * 0.01 * screenHeight, "pixel"
     elseif unit == "sc" then
@@ -84,6 +84,63 @@ local function resolveLength(length)
   else
     return 0, "auto"
   end
+end
+
+local transparent = 0x00ffffff
+local white = 0xffffffff
+local black = 0xff000000
+
+
+local function getColorAlpha(color)
+  return math.floor(color / 0x1000000) % 0x100
+end
+
+local function hue2rgb(p, q, t)
+  local tmod = t
+
+  if tmod < 0 then
+    tmod = tmod + 1
+  end
+
+  if tmod > 1 then
+    tmod = tmod - 1
+  end
+
+  if tmod < 1 / 6 then
+    return p + (q - p) * 6 * tmod
+  elseif tmod < 1 / 2 then
+    return q
+  elseif tmod < 2 / 3 then
+    return p + (q - p) * (2 / 3 - tmod) * 6
+  end
+
+  return p
+end
+
+local function hsl(h, s, l, alpha)
+  local red, green, blue
+
+  if s == 0 then
+    red, green, blue = l, l, l
+  else
+    local q = (l < 0.5) and (l * (1 + s)) or (l + s - l * s)
+    local p = 2 * l - q
+
+    local huer = h + 1 / 3
+    local hueg = h
+    local hueb = h - 1 / 3
+
+    red = hue2rgb(p, q, huer)
+    green = hue2rgb(p, q, hueg)
+    blue = hue2rgb(p, q, hueb)
+  end
+
+  local r = math.floor(red * 255 + 0.5)
+  local g = math.floor(green * 255 + 0.5)
+  local b = math.floor(blue * 255 + 0.5)
+  local a = math.floor((alpha or 1) * 255 + 0.5)
+
+  return a * 0x1000000 + r * 0x10000 + g * 0x100 + b
 end
 
 local function createAttributes()
@@ -96,7 +153,7 @@ local function createAttributes()
     borderRadius = "auto",
     borderTopLeftRadius = "auto",
     borderTopRightRadius = "auto",
-    color = 0xffffffff,
+    color = white,
     display = "flex",
     flexDirection = "row",
     flexGrow = 0,
@@ -114,7 +171,7 @@ local function createAttributes()
     paddingTop = "auto",
     position = "relative",
     strokeBottomWeight = "auto",
-    strokeColor = 0xff000000,
+    strokeColor = black,
     strokeLeftWeight = "auto",
     strokeRightWeight = "auto",
     strokeTopWeight = "auto",
@@ -239,6 +296,14 @@ end
 
 function Node:destructor()
 
+end
+
+function Node:setParent(parent)
+  if parent then
+    parent:appendChild(self)
+  elseif self.parent then
+    self.parent:removeChild(self)
+  end
 end
 
 function Node:appendChild(child)
@@ -408,7 +473,7 @@ function splitChildrenIntoLines(node, isMainAxisRow, mainAxisDimension, mainAxis
     end
   end
 
-  return flexLines, linesMainMaximumLineSize, linesCrossTotalLinesSize, secondPassChildren, thirdPassChildren
+  return flexLines, linesMainMaximumLineSize - paddingMainStart, linesCrossTotalLinesSize - paddingCrossStart, secondPassChildren, thirdPassChildren
 end
 
 function calculateLayout(node, availableWidth, availableHeight, forcedWidth, forcedHeight, parentIsMainAxisRow, parentStretchChildren)
@@ -529,19 +594,19 @@ function calculateLayout(node, availableWidth, availableHeight, forcedWidth, for
     local resolvedCrossSize = isMainAxisRow and resolvedHeight or resolvedWidth
 
     if containerMainSize == nil and (resolvedMainSize.unit == "auto" or resolvedMainSize.unit == "fit-content") then
-      computedWidth = isMainAxisRow and (linesMainMaximumLineSize + paddingMainEnd) or computedWidth
-      computedHeight = not isMainAxisRow and (linesMainMaximumLineSize + paddingMainEnd) or computedHeight
+      computedWidth = isMainAxisRow and (linesMainMaximumLineSize + paddingMainStart + paddingMainEnd) or computedWidth
+      computedHeight = not isMainAxisRow and (linesMainMaximumLineSize + paddingMainStart + paddingMainEnd) or computedHeight
 
       containerMainSize = isMainAxisRow and computedWidth or computedHeight
-      containerMainInnerSize = math.max(containerMainSize - paddingMainStart - paddingMainEnd, 0)
+      containerMainInnerSize = linesMainMaximumLineSize
     end
 
     if resolvedCrossSize.unit == "auto" or resolvedCrossSize.unit == "fit-content" then
-      computedWidth = not isMainAxisRow and (linesCrossTotalLinesSize + paddingCrossEnd) or computedWidth
-      computedHeight = isMainAxisRow and (linesCrossTotalLinesSize + paddingCrossEnd) or computedHeight
+      computedWidth = not isMainAxisRow and (linesCrossTotalLinesSize + paddingCrossStart + paddingCrossEnd) or computedWidth
+      computedHeight = isMainAxisRow and (linesCrossTotalLinesSize + paddingCrossStart + paddingCrossEnd) or computedHeight
 
       containerCrossSize = isMainAxisRow and computedHeight or computedWidth
-      containerCrossInnerSize = math.max(containerCrossSize - paddingCrossStart - paddingCrossEnd, 0)
+      containerCrossInnerSize = linesCrossTotalLinesSize
     end
 
     if not parentIsMainAxisRow and parentStretchChildren and resolvedWidth.unit == "auto" and (alignSelf == "auto" or alignSelf == "stretch") and availableWidth then
@@ -565,11 +630,11 @@ function calculateLayout(node, availableWidth, availableHeight, forcedWidth, for
       flexLines, _, linesCrossTotalLinesSize, _, thirdPassChildren = splitChildrenIntoLines(node, isMainAxisRow, mainAxisDimension, mainAxisPosition, crossAxisDimension, crossAxisPosition, containerMainSize, containerCrossSize, containerMainInnerSize, containerCrossInnerSize, paddingMainStart, paddingCrossStart, gapMain, gapCross, flexCanWrap, stretchChildren, children, childcount, true, false)
 
       if (resolvedCrossSize.unit == "auto" or resolvedCrossSize.unit == "fit-content") then
-        computedWidth = not isMainAxisRow and (linesCrossTotalLinesSize + paddingCrossEnd) or computedWidth
-        computedHeight = isMainAxisRow and (linesCrossTotalLinesSize + paddingCrossEnd) or computedHeight
+        computedWidth = not isMainAxisRow and (linesCrossTotalLinesSize + paddingCrossStart + paddingCrossEnd) or computedWidth
+        computedHeight = isMainAxisRow and (linesCrossTotalLinesSize + paddingCrossStart + paddingCrossEnd) or computedHeight
 
         containerCrossSize = isMainAxisRow and computedHeight or computedWidth
-        containerCrossInnerSize = math.max(containerCrossSize - paddingCrossStart - paddingCrossEnd, 0)
+        containerCrossInnerSize = linesCrossTotalLinesSize
       end
 
       if not parentIsMainAxisRow and parentStretchChildren and resolvedWidth.unit == "auto" and (alignSelf == "auto" or alignSelf == "stretch") and availableWidth then
@@ -625,7 +690,7 @@ function calculateLayout(node, availableWidth, availableHeight, forcedWidth, for
       end
     end
 
-    local flexLinesAlignItemsOffset = flexAlignItems == "center" and (flexContainerCrossInnerSize - flexLinesCrossTotalSize) * 0.5 or flexAlignItems == "flex-end" and flexContainerCrossInnerSize - flexLinesCrossTotalSize or 0
+    local flexLinesAlignItemsOffset = alignItems == "center" and (containerCrossInnerSize - linesCrossTotalLinesSize) * 0.5 or alignItems == "flex-end" and containerCrossInnerSize - linesCrossTotalLinesSize or 0
 
     for i = 1, #flexLines do
       local currentLine = flexLines[i]
@@ -691,58 +756,6 @@ function calculateLayout(node, availableWidth, availableHeight, forcedWidth, for
   end
 
   return true
-end
-
-local function getColorAlpha(color)
-  return math.floor(color / 0x1000000) % 0x100
-end
-
-local function hue2rgb(p, q, t)
-  local tmod = t
-
-  if tmod < 0 then
-    tmod = tmod + 1
-  end
-
-  if tmod > 1 then
-    tmod = tmod - 1
-  end
-
-  if tmod < 1 / 6 then
-    return p + (q - p) * 6 * tmod
-  elseif tmod < 1 / 2 then
-    return q
-  elseif tmod < 2 / 3 then
-    return p + (q - p) * (2 / 3 - tmod) * 6
-  end
-
-  return p
-end
-
-local function hsl(h, s, l, alpha)
-  local red, green, blue
-
-  if s == 0 then
-    red, green, blue = l, l, l
-  else
-    local q = (l < 0.5) and (l * (1 + s)) or (l + s - l * s)
-    local p = 2 * l - q
-
-    local huer = h + 1 / 3
-    local hueg = h
-    local hueb = h - 1 / 3
-
-    red = hue2rgb(p, q, huer)
-    green = hue2rgb(p, q, hueg)
-    blue = hue2rgb(p, q, hueb)
-  end
-
-  local r = math.floor(red * 255 + 0.5)
-  local g = math.floor(green * 255 + 0.5)
-  local b = math.floor(blue * 255 + 0.5)
-  local a = math.floor((alpha or 1) * 255 + 0.5)
-
-  return a * 0x1000000 + r * 0x10000 + g * 0x100 + b
 end
 
 local RectangleShaderString = [[
@@ -815,7 +828,7 @@ local RectangleShaderString = [[
 	}
 ]]
 
-local function renderer(node, px, py, depth)
+local function renderer(node, px, py)
   local computed = node.computed
 
   local computedWidth = computed.width
@@ -826,7 +839,7 @@ local function renderer(node, px, py, depth)
 
   local resolved = node.resolved
 
-  local resolvedBorderRadius = { value = 5, unit = "pixel" } -- resolved.borderRadius
+  local resolvedBorderRadius = resolved.borderRadius
   local resolvedBorderTopLeftRadius = resolved.borderTopLeftRadius
   local resolvedBorderTopRightRadius = resolved.borderTopRightRadius
   local resolvedBorderBottomLeftRadius = resolved.borderBottomLeftRadius
@@ -879,7 +892,7 @@ local function renderer(node, px, py, depth)
         * 0.5
   end
 
-  local resolvedStrokeWeight = { value = 1, unit = "pixel" } -- resolved.strokeWeight
+  local resolvedStrokeWeight = resolved.strokeWeight
   local resolvedStrokeLeftWeight = resolved.strokeLeftWeight
   local resolvedStrokeTopWeight = resolved.strokeTopWeight
   local resolvedStrokeRightWeight = resolved.strokeRightWeight
@@ -917,8 +930,8 @@ local function renderer(node, px, py, depth)
   local usingRectangleShader = renderBorderTopLeftRadius > 0 or renderBorderTopRightRadius > 0 or renderBorderBottomLeftRadius > 0 or renderBorderBottomRightRadius > 0
 
   local attributes = node.__attributes
-  local backgroundColor = hsl(0, 0, 0.15 + depth * 0.025) -- attributes.backgroundColor
-  local strokeColor = hsl(0, 0, 0.2 + depth * 0.025)      -- attributes.strokeColor
+  local backgroundColor = attributes.backgroundColor
+  local strokeColor = attributes.strokeColor
   local color = attributes.color
 
   local render = node.render
@@ -1059,16 +1072,27 @@ local function renderer(node, px, py, depth)
   local childCount = children and #children or 0
 
   for i = 1, childCount do
-    renderer(children[i], x, y, depth + 1)
+    renderer(children[i], x, y)
   end
 end
 
-local tree = Node({padding = 10}, Node({width = 50, height = 100}), Text({text = "Hello, World!", alignSelf = "center"}), Image({width = 100, height = 100, material = dxCreateTexture("layta-white.png")}))
+local tree = Node()
 
 addEventHandler("onClientRender", root, function()
-  calculateLayout(tree)
+  calculateLayout(tree, screenWidth, nil, nil, nil, false, false)
 end)
 
 addEventHandler("onClientRender", root, function()
-  renderer(tree, 0, 0, 0)
+  renderer(tree, 0, 0)
 end)
+
+Layta = {
+  Node = Node,
+  Text = Text,
+  Image = Image,
+  hsl = hsl,
+  transparent = transparent,
+  white = white,
+  black = black,
+  tree = tree,
+}
