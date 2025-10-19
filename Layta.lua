@@ -538,8 +538,9 @@ function splitChildrenIntoLines(
 					childResolvedMainSize.unit == "percentage" and containerMainSize == nil
 					or (
 						childResolvedCrossSize.unit == "auto"
-						and stretchChildren
-						and (childAlignSelf == "auto" or childAlignSelf == "stretch")
+							and stretchChildren
+							and (childAlignSelf == "auto" or childAlignSelf == "stretch")
+						or childResolvedCrossSize.unit == "percentage"
 					)
 				then
 					if not secondPassChildren then
