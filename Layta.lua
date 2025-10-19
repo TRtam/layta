@@ -593,20 +593,41 @@ function calculateLayout(node, availableWidth, availableHeight, forcedWidth, for
       end
     end
 
+    local flexLinesAlignItemsOffset = flexAlignItems == "center" and (flexContainerCrossInnerSize - flexLinesCrossTotalSize) * 0.5 or flexAlignItems == "flex-end" and flexContainerCrossInnerSize - flexLinesCrossTotalSize or 0
+
     for i = 1, #flexLines do
       local currentLine = flexLines[i]
 
-      local caretMainPosition = currentLine[mainAxisPosition]
-      local caretCrossPosition = currentLine[crossAxisPosition]
+      local currentLineChildCount = #currentLine
+      local currentLineCrossSize = currentLine[crossAxisDimension]
+      local currentLineRemainingFreeSpace = currentLine.remainingFreeSpace
+
+      local currentLineJustifyContentGap = justifyContent == "space-between" and currentLineChildCount > 1 and currentLineRemainingFreeSpace / (currentLineChildCount - 1) or justifyContent == "space-around" and currentLineRemainingFreeSpace / currentLineChildCount or justifyContent == "space-evenly" and currentLineRemainingFreeSpace / (currentLineChildCount + 1) or 0
+
+      local currentLineJustifyContentOffset = justifyContent == "center" and currentLineRemainingFreeSpace * 0.5 or justifyContent == "flex-end" and currentLineRemainingFreeSpace or justifyContent == "space-between" and 0 or justifyContent == "space-around" and currentLineJustifyContentGap * 0.5 or justifyContent == "space-evenly" and currentLineJustifyContentGap or 0
+
+      local caretMainPosition = currentLine[mainAxisPosition] + currentLineJustifyContentOffset
+      local caretCrossPosition = currentLine[crossAxisPosition] + flexLinesAlignItemsOffset
 
       for i = 1, #currentLine do
         local child = currentLine[i]
 
-        local childComputed = child.computed
-        childComputed[mainAxisPosition] = math.floor(caretMainPosition + 0.5)
-        childComputed[crossAxisPosition] = math.floor(caretCrossPosition + 0.5)
+        local childAttributes = child.__attributes
+        local childAlignSelf = childAttributes.alignSelf
 
-        caretMainPosition = caretMainPosition + childComputed[mainAxisDimension] + gapMain
+        if childAlignSelf == "auto" then
+          childAlignSelf = alignItems
+        end
+
+        local childComputed = child.computed
+        local childComputedCrossSize = childComputed[crossAxisDimension]
+
+        local childCrossOffset = childAlignSelf == "center" and (currentLineCrossSize - childComputedCrossSize) * 0.5 or childAlignSelf == "flex-end" and currentLineCrossSize - childComputedCrossSize or 0
+
+        childComputed[mainAxisPosition] = math.floor(caretMainPosition + 0.5)
+        childComputed[crossAxisPosition] = math.floor((caretCrossPosition + childCrossOffset) + 0.5)
+
+        caretMainPosition = caretMainPosition + childComputed[mainAxisDimension] + gapMain + currentLineJustifyContentGap
       end
     end
   else
@@ -1010,7 +1031,7 @@ local function renderer(node, px, py, depth)
   end
 end
 
-local tree = Node({padding = 10, height = 100}, Text({text = "Hello, World!"}))
+local tree = Node({padding = 10}, Node({width = 50, height = 100}), Text({text = "Hello, World!", alignSelf = "center"}))
 
 addEventHandler("onClientRender", root, function()
   calculateLayout(tree)
