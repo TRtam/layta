@@ -351,17 +351,13 @@ function Node:reindexChildren(startAt)
 end
 
 function Node:markDirty()
-  if self.dirty then
-    return false
+  if not self.dirty then
+    self.dirty = true
   end
-
-  self.dirty = true
 
   if self.parent then
     self.parent:markDirty()
   end
-
-  return true
 end
 
 Text = createClass(Node)
@@ -412,64 +408,67 @@ function splitChildrenIntoLines(node, isMainAxisRow, mainAxisDimension, mainAxis
 
   for i = 1, childcount do
     local child = children[i]
-    local childResolved = child.resolved
+    local childAttributes = child.__attributes
 
-    if not doingSecondPass then
-      local availableWidth = isMainAxisRow and containerMainSize ~= nil and containerMainInnerSize or not isMainAxisRow and containerCrossSize ~= nil and containerCrossInnerSize or nil
-      local availableHeight = isMainAxisRow and containerCrossSize ~= nil and containerCrossInnerSize or not isMainAxisRow and containerMainSize ~= nil and containerMainInnerSize or nil
+    if childAttributes.visible then
+      local childResolved = child.resolved
 
-      calculateLayout(child, availableWidth, availableHeight, nil, nil, isMainAxisRow, stretchChildren)
+      if not doingSecondPass then
+        local availableWidth = isMainAxisRow and containerMainSize ~= nil and containerMainInnerSize or not isMainAxisRow and containerCrossSize ~= nil and containerCrossInnerSize or nil
+        local availableHeight = isMainAxisRow and containerCrossSize ~= nil and containerCrossInnerSize or not isMainAxisRow and containerMainSize ~= nil and containerMainInnerSize or nil
 
-      local childResolvedMainSize = childResolved[mainAxisDimension]
-      local childResolvedCrossSize = childResolved[crossAxisDimension]
+        calculateLayout(child, availableWidth, availableHeight, nil, nil, isMainAxisRow, stretchChildren)
 
-      local childAttributes = child.__attributes
-      local childAlignSelf = childAttributes.alignSelf
+        local childResolvedMainSize = childResolved[mainAxisDimension]
+        local childResolvedCrossSize = childResolved[crossAxisDimension]
 
-      if childResolvedMainSize.unit == "percentage" and containerMainSize == nil or (childResolvedCrossSize.unit == "auto" and stretchChildren and (childAlignSelf == "auto" or childAlignSelf == "stretch")) and containerCrossSize == nil then
-        if not secondPassChildren then secondPassChildren = {} end
-        table.insert(secondPassChildren, child)
+        local childAlignSelf = childAttributes.alignSelf
+
+        if childResolvedMainSize.unit == "percentage" and containerMainSize == nil or (childResolvedCrossSize.unit == "auto" and stretchChildren and (childAlignSelf == "auto" or childAlignSelf == "stretch")) and containerCrossSize == nil then
+          if not secondPassChildren then secondPassChildren = {} end
+          table.insert(secondPassChildren, child)
+        end
       end
-    end
 
-    local childComputed = child.computed
-    local childComputedMainSize = not doingThirdPass and childComputed.flexBasis or childComputed[mainAxisDimension]
-    local childComputedCrossSize = childComputed[crossAxisDimension]
+      local childComputed = child.computed
+      local childComputedMainSize = not doingThirdPass and childComputed.flexBasis or childComputed[mainAxisDimension]
+      local childComputedCrossSize = childComputed[crossAxisDimension]
 
-    if flexCanWrap and #currentLine > 1 and currentLine[mainAxisDimension] + gapMain + childComputedMainSize > containerMainInnerSize then
-      local previousLine = currentLine
+      if flexCanWrap and #currentLine > 1 and currentLine[mainAxisDimension] + gapMain + childComputedMainSize > containerMainInnerSize then
+        local previousLine = currentLine
 
-      currentLine = { [mainAxisDimension] = 0, [mainAxisPosition] = paddingMainStart, [crossAxisDimension] = 0, [crossAxisPosition] = gapCross + previousLine[crossAxisPosition] + previousLine[crossAxisDimension], remainingFreeSpace = 0, totalFlexGrowFactor = 0, totalFlexShrinkScaledFactor = 0 }
+        currentLine = { [mainAxisDimension] = 0, [mainAxisPosition] = paddingMainStart, [crossAxisDimension] = 0, [crossAxisPosition] = gapCross + previousLine[crossAxisPosition] + previousLine[crossAxisDimension], remainingFreeSpace = 0, totalFlexGrowFactor = 0, totalFlexShrinkScaledFactor = 0 }
 
-      table.insert(flexLines, currentLine)
-    end
+        table.insert(flexLines, currentLine)
+      end
 
-    table.insert(currentLine, child)
+      table.insert(currentLine, child)
 
-    currentLine[mainAxisDimension] = currentLine[mainAxisDimension] +
-    (#currentLine > 0 and i < childcount and gapMain or 0) + childComputedMainSize
-    currentLine[crossAxisDimension] = math.max(currentLine[crossAxisDimension], childComputedCrossSize)
+      currentLine[mainAxisDimension] = currentLine[mainAxisDimension] +
+      (#currentLine > 0 and i < childcount and gapMain or 0) + childComputedMainSize
+      currentLine[crossAxisDimension] = math.max(currentLine[crossAxisDimension], childComputedCrossSize)
 
-    if containerMainSize ~= nil then
-      currentLine.remainingFreeSpace = containerMainInnerSize - currentLine[mainAxisDimension]
-    end
+      if containerMainSize ~= nil then
+        currentLine.remainingFreeSpace = containerMainInnerSize - currentLine[mainAxisDimension]
+      end
 
-    linesMainMaximumLineSize = math.max(linesMainMaximumLineSize,
-      currentLine[mainAxisPosition] + currentLine[mainAxisDimension])
-    linesCrossTotalLinesSize = math.max(linesCrossTotalLinesSize,
-      currentLine[crossAxisPosition] + currentLine[crossAxisDimension])
+      linesMainMaximumLineSize = math.max(linesMainMaximumLineSize,
+        currentLine[mainAxisPosition] + currentLine[mainAxisDimension])
+      linesCrossTotalLinesSize = math.max(linesCrossTotalLinesSize,
+        currentLine[crossAxisPosition] + currentLine[crossAxisDimension])
 
-    local childFlexGrow = childResolved.flexGrow.value
-    local childFlexShrink = childResolved.flexShrink.value
+      local childFlexGrow = childResolved.flexGrow.value
+      local childFlexShrink = childResolved.flexShrink.value
 
-    if childFlexGrow > 0 or childFlexShrink > 0 then
-      currentLine.totalFlexGrowFactor = currentLine.totalFlexGrowFactor + childFlexGrow
-      currentLine.totalFlexShrinkScaledFactor = currentLine.totalFlexShrinkScaledFactor +
-      childFlexShrink * childComputedMainSize
+      if childFlexGrow > 0 or childFlexShrink > 0 then
+        currentLine.totalFlexGrowFactor = currentLine.totalFlexGrowFactor + childFlexGrow
+        currentLine.totalFlexShrinkScaledFactor = currentLine.totalFlexShrinkScaledFactor +
+        childFlexShrink * childComputedMainSize
 
-      if not thirdPassChildren then thirdPassChildren = {} end
-      table.insert(thirdPassChildren, child)
-      thirdPassChildren[child] = currentLine
+        if not thirdPassChildren then thirdPassChildren = {} end
+        table.insert(thirdPassChildren, child)
+        thirdPassChildren[child] = currentLine
+      end
     end
   end
 
@@ -829,6 +828,12 @@ local RectangleShaderString = [[
 ]]
 
 local function renderer(node, px, py)
+  local attributes = node.__attributes
+
+  if not attributes.visible then
+    return false
+  end
+
   local computed = node.computed
 
   local computedWidth = computed.width
@@ -1074,6 +1079,8 @@ local function renderer(node, px, py)
   for i = 1, childCount do
     renderer(children[i], x, y)
   end
+
+  return true
 end
 
 local tree = Node()
