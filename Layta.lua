@@ -127,22 +127,22 @@ function Node:constructor(attributes, ...)
   self.children = {}
 
   self.resolved = {
-    borderBottomLeftRadius = {value = 0, unit = "auto"},
-    borderBottomRightRadius = {value = 0, unit = "auto"},
-    borderRadius = {value = 0, unit = "auto"},
-    borderTopLeftRadius = {value = 0, unit = "auto"},
-    borderTopRightRadius = {value = 0, unit = "auto"},
-    flexGrow = {value = 0, unit = "pixel"},
-    flexShrink = {value = 0, unit = "pixel"},
-    gap = {value = 0, unit = "auto"},
-    height = {value = 0, unit = "auto"},
-    padding = {value = 0, unit = "auto"},
-    strokeBottomWeight = {value = 0, unit = "auto"},
-    strokeLeftWeight = {value = 0, unit = "auto"},
-    strokeRightWeight = {value = 0, unit = "auto"},
-    strokeTopWeight = {value = 0, unit = "auto"},
-    strokeWeight = {value = 0, unit = "auto"},
-    width = {value = 0, unit = "auto"},
+    borderBottomLeftRadius = { value = 0, unit = "auto" },
+    borderBottomRightRadius = { value = 0, unit = "auto" },
+    borderRadius = { value = 0, unit = "auto" },
+    borderTopLeftRadius = { value = 0, unit = "auto" },
+    borderTopRightRadius = { value = 0, unit = "auto" },
+    flexGrow = { value = 0, unit = "pixel" },
+    flexShrink = { value = 0, unit = "pixel" },
+    gap = { value = 0, unit = "auto" },
+    height = { value = 0, unit = "auto" },
+    padding = { value = 0, unit = "auto" },
+    strokeBottomWeight = { value = 0, unit = "auto" },
+    strokeLeftWeight = { value = 0, unit = "auto" },
+    strokeRightWeight = { value = 0, unit = "auto" },
+    strokeTopWeight = { value = 0, unit = "auto" },
+    strokeWeight = { value = 0, unit = "auto" },
+    width = { value = 0, unit = "auto" },
   }
 
   self.attributes = createProxy(createAttributes(), function(key, value)
@@ -155,7 +155,7 @@ function Node:constructor(attributes, ...)
     self:markDirty()
   end)
 
-  self.computed = {flexBasis = 0, height = 0, width = 0, x = 0, y = 0,}
+  self.computed = { flexBasis = 0, height = 0, width = 0, x = 0, y = 0, }
 
   self.render = {}
 
@@ -189,6 +189,9 @@ function Node:appendChild(child)
 
   child.parent = self
   child.index = #self.children
+  child.dirty = true
+
+  self:markDirty()
 
   return true
 end
@@ -203,6 +206,8 @@ function Node:removeChild(child)
 
   child.parent = false
   child.index = false
+
+  self:markDirty()
 
   return true
 end
@@ -234,7 +239,7 @@ local splitChildrenIntoLines
 local calculateLayout
 
 function splitChildrenIntoLines(node, isMainAxisRow, mainAxisDimension, mainAxisPosition, crossAxisDimension, crossAxisPosition, containerMainSize, containerCrossSize, containerMainInnerSize, containerCrossInnerSize, paddingMainStart, paddingCrossStart, gapMain, gapCross, flexCanWrap, stretchChildren, children, childcount, doingSecondPass, doingThirdPass)
-  local flexLines = {{[mainAxisDimension] = 0, [mainAxisPosition] = paddingMainStart, [crossAxisDimension] = 0, [crossAxisPosition] = paddingCrossStart, remainingFreeSpace = 0, totalFlexGrowFactor = 0, totalFlexShrinkScaledFactor = 0}}
+  local flexLines = { { [mainAxisDimension] = 0, [mainAxisPosition] = paddingMainStart, [crossAxisDimension] = 0, [crossAxisPosition] = paddingCrossStart, remainingFreeSpace = 0, totalFlexGrowFactor = 0, totalFlexShrinkScaledFactor = 0 } }
   local currentLine = flexLines[1]
 
   local linesMainMaximumLineSize = 0
@@ -260,6 +265,10 @@ function splitChildrenIntoLines(node, isMainAxisRow, mainAxisDimension, mainAxis
         if not secondPassChildren then secondPassChildren = {} end
         table.insert(secondPassChildren, child)
       end
+
+      if node.attributes.debug then
+        iprint(i, child.computed)
+      end
     end
 
     local childComputed = child.computed
@@ -269,14 +278,15 @@ function splitChildrenIntoLines(node, isMainAxisRow, mainAxisDimension, mainAxis
     if flexCanWrap and #currentLine > 1 and currentLine[mainAxisDimension] + gapMain + childComputedMainSize > containerMainInnerSize then
       local previousLine = currentLine
 
-      currentLine = {[mainAxisDimension] = 0, [mainAxisPosition] = paddingMainStart, [crossAxisDimension] = 0, [crossAxisPosition] = gapCross + previousLine[crossAxisPosition] + previousLine[crossAxisDimension], remainingFreeSpace = 0, totalFlexGrowFactor = 0, totalFlexShrinkScaledFactor = 0}
+      currentLine = { [mainAxisDimension] = 0, [mainAxisPosition] = paddingMainStart, [crossAxisDimension] = 0, [crossAxisPosition] = gapCross + previousLine[crossAxisPosition] + previousLine[crossAxisDimension], remainingFreeSpace = 0, totalFlexGrowFactor = 0, totalFlexShrinkScaledFactor = 0 }
 
       table.insert(flexLines, currentLine)
     end
 
     table.insert(currentLine, child)
 
-    currentLine[mainAxisDimension] = currentLine[mainAxisDimension] + (#currentLine > 1 and i < childcount and gapMain or 0) + childComputedMainSize
+    currentLine[mainAxisDimension] = currentLine[mainAxisDimension] +
+    (#currentLine > 0 and i < childcount and gapMain or 0) + childComputedMainSize
     currentLine[crossAxisDimension] = math.max(currentLine[crossAxisDimension], childComputedCrossSize)
 
     if containerMainSize ~= nil then
@@ -293,7 +303,8 @@ function splitChildrenIntoLines(node, isMainAxisRow, mainAxisDimension, mainAxis
 
     if childFlexGrow > 0 or childFlexShrink > 0 then
       currentLine.totalFlexGrowFactor = currentLine.totalFlexGrowFactor + childFlexGrow
-      currentLine.totalFlexShrinkScaledFactor = currentLine.totalFlexShrinkScaledFactor + childFlexShrink * childComputedMainSize
+      currentLine.totalFlexShrinkScaledFactor = currentLine.totalFlexShrinkScaledFactor +
+      childFlexShrink * childComputedMainSize
 
       if not thirdPassChildren then thirdPassChildren = {} end
       table.insert(thirdPassChildren, child)
@@ -305,6 +316,12 @@ function splitChildrenIntoLines(node, isMainAxisRow, mainAxisDimension, mainAxis
 end
 
 function calculateLayout(node, availableWidth, availableHeight, forcedWidth, forcedHeight, parentIsMainAxisRow, parentStretchChildren)
+  if not node.dirty then
+    return false
+  end
+
+  node.dirty = false
+
   local resolved = node.resolved
   local resolvedWidth = resolved.width
   local resolvedHeight = resolved.height
@@ -317,26 +334,20 @@ function calculateLayout(node, availableWidth, availableHeight, forcedWidth, for
     computedWidth = forcedWidth
   elseif resolvedWidth.unit == "pixel" then
     computedWidth = resolvedWidth.value
-    computed.flexBasis = parentIsMainAxisRow and computedWidth or computed.flexBasis
   elseif resolvedWidth.unit == "percentage" and availableWidth then
     computedWidth = resolvedWidth.value * availableWidth
-    computed.flexBasis = parentIsMainAxisRow and computedWidth or computed.flexBasis
   elseif resolvedWidth.unit == "auto" and not parentIsMainAxisRow and parentStretchChildren and availableWidth then
     computedWidth = availableWidth
-    computed.flexBasis = parentIsMainAxisRow and computedWidth or computed.flexBasis
   end
 
   if forcedHeight then
     computedHeight = forcedHeight
   elseif resolvedHeight.unit == "pixel" then
     computedHeight = resolvedHeight.value
-    computed.flexBasis = not parentIsMainAxisRow and computedHeight or computed.flexBasis
   elseif resolvedHeight.unit == "percentage" and availableHeight then
     computedHeight = resolvedHeight.value * availableHeight
-    computed.flexBasis = not parentIsMainAxisRow and computedHeight or computed.flexBasis
   elseif resolvedHeight.unit == "auto" and parentIsMainAxisRow and parentStretchChildren and availableHeight then
     computedHeight = availableHeight
-    computed.flexBasis = not parentIsMainAxisRow and computedHeight or computed.flexBasis
   end
 
   local attributes = node.attributes
@@ -392,8 +403,6 @@ function calculateLayout(node, availableWidth, availableHeight, forcedWidth, for
       computedWidth = isMainAxisRow and (linesMainMaximumLineSize + paddingMainEnd) or computedWidth
       computedHeight = not isMainAxisRow and (linesMainMaximumLineSize + paddingMainEnd) or computedHeight
 
-      computed.flexBasis = parentIsMainAxisRow and computedWidth or computed.flexBasis
-
       containerMainSize = isMainAxisRow and computedWidth or computedHeight
       containerMainInnerSize = math.max(containerMainSize - paddingMainStart - paddingMainEnd, 0)
     end
@@ -401,8 +410,6 @@ function calculateLayout(node, availableWidth, availableHeight, forcedWidth, for
     if resolvedCrossSize.unit == "auto" or resolvedCrossSize.unit == "fit-content" then
       computedWidth = not isMainAxisRow and (linesCrossTotalLinesSize + paddingCrossEnd) or computedWidth
       computedHeight = isMainAxisRow and (linesCrossTotalLinesSize + paddingCrossEnd) or computedHeight
-
-      computed.flexBasis = not parentIsMainAxisRow and computedHeight or computed.flexBasis
 
       containerCrossSize = isMainAxisRow and computedHeight or computedWidth
       containerCrossInnerSize = math.max(containerCrossSize - paddingCrossStart - paddingCrossEnd, 0)
@@ -418,6 +425,8 @@ function calculateLayout(node, availableWidth, availableHeight, forcedWidth, for
       for i = 1, #secondPassChildren do
         local child = secondPassChildren[i]
 
+        child.dirty = true
+
         local availableWidth = isMainAxisRow and containerMainSize ~= nil and containerMainInnerSize or not isMainAxisRow and containerCrossSize ~= nil and containerCrossInnerSize
         local availableHeight = isMainAxisRow and containerCrossSize ~= nil and containerCrossInnerSize or not isMainAxisRow and containerMainSize ~= nil and containerMainInnerSize
 
@@ -429,8 +438,6 @@ function calculateLayout(node, availableWidth, availableHeight, forcedWidth, for
       if (resolvedCrossSize.unit == "auto" or resolvedCrossSize.unit == "fit-content") then
         computedWidth = not isMainAxisRow and (linesCrossTotalLinesSize + paddingCrossEnd) or computedWidth
         computedHeight = isMainAxisRow and (linesCrossTotalLinesSize + paddingCrossEnd) or computedHeight
-
-        computed.flexBasis = not parentIsMainAxisRow and computedHeight or computed.flexBasis
 
         containerCrossSize = isMainAxisRow and computedHeight or computedWidth
         containerCrossInnerSize = math.max(containerCrossSize - paddingCrossStart - paddingCrossEnd, 0)
@@ -455,6 +462,8 @@ function calculateLayout(node, availableWidth, availableHeight, forcedWidth, for
         local lineRemainingFreeSpace = line.remainingFreeSpace
 
         if childFlexGrow > 0 and lineRemainingFreeSpace > 0 then
+          child.dirty = true
+
           local childComputed = child.computed
           local childComputedMainSize = childComputed.flexBasis
 
@@ -466,20 +475,15 @@ function calculateLayout(node, availableWidth, availableHeight, forcedWidth, for
           local forcedWidth = isMainAxisRow and (childComputedMainSize + flexGrowAmount) or nil
           local forcedHeight = not isMainAxisRow and (childComputedMainSize + flexGrowAmount) or nil
 
-          calculateLayout(
-            child,
-            availableWidth,
-            availableHeight,
-            forcedWidth,
-            forcedHeight,
-            isMainAxisRow,
-            stretchChildren
-          )
+          calculateLayout(child, availableWidth, availableHeight, forcedWidth, forcedHeight, isMainAxisRow, stretchChildren)
         elseif childFlexShrink > 0 and lineRemainingFreeSpace < 0 then
+          child.dirty = true
+
           local childComputed = child.computed
           local childComputedMainSize = childComputed.flexBasis
 
-          local flexShrinkAmount = childComputedMainSize * (childFlexShrink / line.totalFlexShrinkScaledFactor) * -lineRemainingFreeSpace
+          local flexShrinkAmount = childComputedMainSize * (childFlexShrink / line.totalFlexShrinkScaledFactor) *
+          -lineRemainingFreeSpace
 
           local availableWidth = isMainAxisRow and containerMainSize ~= nil and containerMainInnerSize or not isMainAxisRow and containerCrossSize ~= nil and containerCrossInnerSize
           local availableHeight = isMainAxisRow and containerCrossSize ~= nil and containerCrossInnerSize or not isMainAxisRow and containerMainSize ~= nil and containerMainInnerSize
@@ -487,15 +491,7 @@ function calculateLayout(node, availableWidth, availableHeight, forcedWidth, for
           local forcedWidth = isMainAxisRow and math.max(childComputedMainSize - flexShrinkAmount, 0) or nil
           local forcedHeight = not isMainAxisRow and math.max(childComputedMainSize - flexShrinkAmount, 0) or nil
 
-          calculateLayout(
-            child,
-            availableWidth,
-            availableHeight,
-            forcedWidth,
-            forcedHeight,
-            isMainAxisRow,
-            stretchChildren
-          )
+          calculateLayout(child, availableWidth, availableHeight, forcedWidth, forcedHeight, isMainAxisRow, stretchChildren)
         end
       end
     end
@@ -520,6 +516,16 @@ function calculateLayout(node, availableWidth, availableHeight, forcedWidth, for
 
   computed.width = computedWidth or 0
   computed.height = computedHeight or 0
+
+  if not forcedWidth then
+    computed.flexBasis = parentIsMainAxisRow and (computedWidth or 0) or computed.flexBasis
+  end
+
+  if not forcedHeight then
+    computed.flexBasis = not parentIsMainAxisRow and (computedHeight or 0) or computed.flexBasis
+  end
+
+  return true
 end
 
 local function getColorAlpha(color)
@@ -655,7 +661,7 @@ local function renderer(node, px, py, depth)
 
   local resolved = node.resolved
 
-  local resolvedBorderRadius = {value = 5, unit = "pixel"} -- resolved.borderRadius
+  local resolvedBorderRadius = { value = 5, unit = "pixel" } -- resolved.borderRadius
   local resolvedBorderTopLeftRadius = resolved.borderTopLeftRadius
   local resolvedBorderTopRightRadius = resolved.borderTopRightRadius
   local resolvedBorderBottomLeftRadius = resolved.borderBottomLeftRadius
@@ -708,7 +714,7 @@ local function renderer(node, px, py, depth)
         * 0.5
   end
 
-  local resolvedStrokeWeight = {value = 1, unit = "pixel"} -- resolved.strokeWeight
+  local resolvedStrokeWeight = { value = 1, unit = "pixel" } -- resolved.strokeWeight
   local resolvedStrokeLeftWeight = resolved.strokeLeftWeight
   local resolvedStrokeTopWeight = resolved.strokeTopWeight
   local resolvedStrokeRightWeight = resolved.strokeRightWeight
@@ -743,14 +749,11 @@ local function renderer(node, px, py, depth)
     renderStrokeBottomWeight = resolvedStrokeBottomWeight.value
   end
 
-  local usingRectangleShader = renderBorderTopLeftRadius > 0
-      or renderBorderTopRightRadius > 0
-      or renderBorderBottomLeftRadius > 0
-      or renderBorderBottomRightRadius > 0
+  local usingRectangleShader = renderBorderTopLeftRadius > 0 or renderBorderTopRightRadius > 0 or renderBorderBottomLeftRadius > 0 or renderBorderBottomRightRadius > 0
 
   local attributes = node.attributes
-  local backgroundColor = hsl(0, 0, 0.15 + depth * 0.05) -- attributes.backgroundColor
-  local strokeColor = hsl(0, 0, 0.2 + depth * 0.05) -- attributes.strokeColor
+  local backgroundColor = hsl(0, 0, 0.15 + depth * 0.025) -- attributes.backgroundColor
+  local strokeColor = hsl(0, 0, 0.2 + depth * 0.025)      -- attributes.strokeColor
   local color = attributes.color
 
   local render = node.render
@@ -759,13 +762,7 @@ local function renderer(node, px, py, depth)
   local hasBackground = getColorAlpha(backgroundColor) > 0
 
   local renderStrokeShader = render.strokeShader
-  local hasStroke = getColorAlpha(strokeColor) > 0
-      and (
-        renderStrokeLeftWeight > 0
-        or renderStrokeTopWeight > 0
-        or renderStrokeRightWeight > 0
-        or renderStrokeBottomWeight > 0
-      )
+  local hasStroke = getColorAlpha(strokeColor) > 0 and (renderStrokeLeftWeight > 0 or renderStrokeTopWeight > 0 or renderStrokeRightWeight > 0 or renderStrokeBottomWeight > 0)
 
   if usingRectangleShader then
     if hasBackground then
@@ -787,12 +784,7 @@ local function renderer(node, px, py, depth)
     local previousBorderBottomLeftRadius = render.borderBottomLeftRadius
     local previousBorderBottomRightRadius = render.borderBottomRightRadius
 
-    if
-        renderBorderTopLeftRadius ~= previousBorderTopLeftRadius
-        or renderBorderTopRightRadius ~= previousBorderTopRightRadius
-        or renderBorderBottomLeftRadius ~= previousBorderBottomLeftRadius
-        or renderBorderBottomRightRadius ~= previousBorderBottomRightRadius
-    then
+    if renderBorderTopLeftRadius ~= previousBorderTopLeftRadius or renderBorderTopRightRadius ~= previousBorderTopRightRadius or renderBorderBottomLeftRadius ~= previousBorderBottomLeftRadius or renderBorderBottomRightRadius ~= previousBorderBottomRightRadius then
       render.borderTopLeftRadius = renderBorderTopLeftRadius
       render.borderTopRightRadius = renderBorderTopRightRadius
       render.borderBottomLeftRadius = renderBorderBottomLeftRadius
@@ -826,12 +818,7 @@ local function renderer(node, px, py, depth)
     local previousStrokeRightWeight = render.strokeRightWeight
     local previousStrokeBottomWeight = render.strokeBottomWeight
 
-    if
-        renderStrokeLeftWeight ~= previousStrokeLeftWeight
-        or renderStrokeTopWeight ~= previousStrokeTopWeight
-        or renderStrokeRightWeight ~= previousStrokeRightWeight
-        or renderStrokeBottomWeight ~= previousStrokeBottomWeight
-    then
+    if renderStrokeLeftWeight ~= previousStrokeLeftWeight or renderStrokeTopWeight ~= previousStrokeTopWeight or renderStrokeRightWeight ~= previousStrokeRightWeight or renderStrokeBottomWeight ~= previousStrokeBottomWeight then
       render.strokeLeftWeight = renderStrokeLeftWeight
       render.strokeTopWeight = renderStrokeTopWeight
       render.strokeRightWeight = renderStrokeRightWeight
@@ -856,6 +843,15 @@ local function renderer(node, px, py, depth)
 
       renderBackgroundShader = nil
       render.backgroundShader = renderBackgroundShader
+    end
+
+    if renderStrokeShader ~= nil then
+      if renderStrokeShader and isElement(renderStrokeShader) then
+        destroyElement(renderStrokeShader)
+      end
+
+      renderStrokeShader = nil
+      render.strokeShader = renderStrokeShader
     end
   end
 
@@ -902,7 +898,11 @@ local function renderer(node, px, py, depth)
   end
 end
 
-local tree = Node({padding = 20, flexWrap = "wrap", gap = 10, width = 300}, Node({width = 100, height = 100}), Node({flexGrow = 1, height = 100}), Node({width = 100, height = 100}), Node({flexShrink = 1, width = 500, height = 100,}))
+local tree = Node(
+  {debug = true, padding = 10, gap = 10},
+  Node({padding = 10, gap = 10}, Node({width = 50, height = 50}), Node({width = 50, height = 50}), Node({width = 50, height = 50})),
+  Node({flexDirection = "column", padding = 10, gap = 10}, Node({width = 50, height = 50}), Node({width = 50, height = 50}), Node({width = 50, height = 50}))
+)
 
 calculateLayout(tree)
 
