@@ -101,10 +101,15 @@ local function createAttributes()
     flexGrow = 0,
     flexShrink = 0,
     flexWrap = "nowrap",
+    font = "default",
     gap = "auto",
     height = "auto",
     justifyContent = "flex-start",
     padding = "auto",
+    paddingBottom = "auto",
+    paddingLeft = "auto",
+    paddingRight = "auto",
+    paddingTop = "auto",
     position = "relative",
     strokeBottomWeight = "auto",
     strokeColor = 0xff000000,
@@ -112,6 +117,13 @@ local function createAttributes()
     strokeRightWeight = "auto",
     strokeTopWeight = "auto",
     strokeWeight = "auto",
+    text = "",
+    textAlignX = "left",
+    textAlignY = "top",
+    textClip = false,
+    textColorCoded = false,
+    textSize = 1,
+    textWordWrap = false,
     visible = true,
     width = "auto",
   }
@@ -126,6 +138,8 @@ function Node:constructor(attributes, ...)
 
   self.children = {}
 
+  self.dirty = true
+
   self.resolved = {
     borderBottomLeftRadius = { value = 0, unit = "auto" },
     borderBottomRightRadius = { value = 0, unit = "auto" },
@@ -137,6 +151,10 @@ function Node:constructor(attributes, ...)
     gap = { value = 0, unit = "auto" },
     height = { value = 0, unit = "auto" },
     padding = { value = 0, unit = "auto" },
+    paddingBottom = { value = 0, unit = "auto" },
+    paddingLeft = { value = 0, unit = "auto" },
+    paddingRight = { value = 0, unit = "auto" },
+    paddingTop = { value = 0, unit = "auto" },
     strokeBottomWeight = { value = 0, unit = "auto" },
     strokeLeftWeight = { value = 0, unit = "auto" },
     strokeRightWeight = { value = 0, unit = "auto" },
@@ -145,17 +163,47 @@ function Node:constructor(attributes, ...)
     width = { value = 0, unit = "auto" },
   }
 
-  self.attributes = createProxy(createAttributes(), function(key, value)
+  self.__attributes = createAttributes()
+
+  self.attributes = createProxy(self.__attributes, function(key, value)
     local resolvedAttribute = self.resolved[key]
 
     if resolvedAttribute then
       resolvedAttribute.value, resolvedAttribute.unit = resolveLength(value)
     end
 
+    if key == "text" then
+      local attributes = self.__attributes
+      local computed = self.computed
+
+      computed.textWidth = dxGetTextWidth(value, attributes.textSize, attributes.font)
+      computed.textHeight = dxGetFontHeight(attributes.textSize, attributes.font)
+    elseif key == "textSize" then
+      local attributes = self.__attributes
+      local computed = self.computed
+
+      computed.textWidth = dxGetTextWidth(attributes.text, value, attributes.font)
+      computed.textHeight = dxGetFontHeight(value, attributes.font)
+    elseif key == "font" then
+      local attributes = self.__attributes
+      local computed = self.computed
+
+      computed.textWidth = dxGetTextWidth(attributes.text, attributes.textSize, value)
+      computed.textHeight = dxGetFontHeight(attributes.textSize, value)
+    end
+
     self:markDirty()
   end)
 
-  self.computed = { flexBasis = 0, height = 0, width = 0, x = 0, y = 0, }
+  self.computed = {
+    flexBasis = 0,
+    height = 0,
+    textHeight = dxGetFontHeight(1, "default"),
+    textWidth = 0,
+    width = 0,
+    x = 0,
+    y = 0,
+  }
 
   self.render = {}
 
@@ -234,6 +282,20 @@ function Node:markDirty()
   return true
 end
 
+Text = createClass(Node)
+
+function Text:measure()
+  local computed = self.computed
+
+  return computed.textWidth, computed.textHeight
+end
+
+function Text:draw(x, y, width, height, color)
+  local attributes = self.attributes
+
+  dxDrawText(self.attributes.text, x, y, x + width, y + height, color, self.attributes.textSize, self.attributes.font, self.attributes.textAlignX, self.attributes.textAlignY, self.attributes.textClip, false, self.attributes.textWordWrap, self.attributes.textColorCoded)
+end
+
 local splitChildrenIntoLines
 
 local calculateLayout
@@ -264,10 +326,6 @@ function splitChildrenIntoLines(node, isMainAxisRow, mainAxisDimension, mainAxis
       if childResolvedMainSize.unit == "percentage" and containerMainSize == nil or childResolvedCrossSize.unit == "auto" and stretchChildren and containerCrossSize == nil then
         if not secondPassChildren then secondPassChildren = {} end
         table.insert(secondPassChildren, child)
-      end
-
-      if node.attributes.debug then
-        iprint(i, child.computed)
       end
     end
 
@@ -362,13 +420,45 @@ function calculateLayout(node, availableWidth, availableHeight, forcedWidth, for
   local crossAxisPosition = isMainAxisRow and "y" or "x"
 
   local resolvedPadding = resolved.padding
-  local computedPadding = resolvedPadding.value
+  local resolvedPaddingLeft = resolved.paddingLeft
+  local resolvedPaddingTop = resolved.paddingTop
+  local resolvedPaddingRight = resolved.paddingRight
+  local resolvedPaddingBottom = resolved.paddingBottom
 
-  local paddingMainStart = computedPadding
-  local paddingMainEnd = computedPadding
+  local computedPaddingLeft = 0
+  local computedPaddingTop = 0
+  local computedPaddingRight = 0
+  local computedPaddingBottom = 0
 
-  local paddingCrossStart = computedPadding
-  local paddingCrossEnd = computedPadding
+  if resolvedPadding.unit == "pixel" then
+    local computedPadding = resolvedPadding.value
+    computedPaddingLeft = computedPadding
+    computedPaddingTop = computedPadding
+    computedPaddingRight = computedPadding
+    computedPaddingBottom = computedPadding
+  end
+
+  if resolvedPaddingLeft.unit == "pixel" then
+    computedPaddingLeft = resolvedPaddingLeft.value
+  end
+
+  if resolvedPaddingTop.unit == "pixel" then
+    computedPaddingTop = resolvedPaddingTop.value
+  end
+
+  if resolvedPaddingRight.unit == "pixel" then
+    computedPaddingRight = resolvedPaddingRight.value
+  end
+
+  if resolvedPaddingBottom.unit == "pixel" then
+    computedPaddingBottom = resolvedPaddingBottom.value
+  end
+
+  local paddingMainStart = isMainAxisRow and computedPaddingLeft or computedPaddingTop
+  local paddingMainEnd = isMainAxisRow and computedPaddingRight or computedPaddingBottom
+
+  local paddingCrossStart = isMainAxisRow and computedPaddingTop or computedPaddingLeft
+  local paddingCrossEnd = isMainAxisRow and computedPaddingBottom or computedPaddingRight
 
   local containerMainSize = isMainAxisRow and computedWidth or not isMainAxisRow and computedHeight or nil
   local containerMainInnerSize = math.max((containerMainSize or 0) - paddingMainStart - paddingMainEnd, 0)
@@ -391,7 +481,7 @@ function calculateLayout(node, availableWidth, availableHeight, forcedWidth, for
   local gapCross = computedGap
 
   local children = node.children
-  local childcount = #children
+  local childcount = children and #children or 0
 
   if childcount > 0 then
     local flexLines, linesMainMaximumLineSize, linesCrossTotalLinesSize, secondPassChildren, thirdPassChildren = splitChildrenIntoLines(node, isMainAxisRow, mainAxisDimension, mainAxisPosition, crossAxisDimension, crossAxisPosition, containerMainSize, containerCrossSize, containerMainInnerSize, containerCrossInnerSize, paddingMainStart, paddingCrossStart, gapMain, gapCross, flexCanWrap, stretchChildren, children, childcount, false, false)
@@ -506,23 +596,38 @@ function calculateLayout(node, availableWidth, availableHeight, forcedWidth, for
         local child = currentLine[i]
 
         local childComputed = child.computed
-        childComputed[mainAxisPosition] = caretMainPosition
-        childComputed[crossAxisPosition] = caretCrossPosition
+        childComputed[mainAxisPosition] = math.floor(caretMainPosition + 0.5)
+        childComputed[crossAxisPosition] = math.floor(caretCrossPosition + 0.5)
 
         caretMainPosition = caretMainPosition + childComputed[mainAxisDimension] + gapMain
       end
     end
+  else
+    local measuredWidth
+    local measuredHeight
+
+    if node.measure then
+      measuredWidth, measuredHeight = node:measure()
+    end
+
+    if measuredWidth and not computedWidth and (resolvedWidth.unit == "auto" or resolvedHeight.unit == "fit-content") then
+      computedWidth = measuredWidth + computedPaddingLeft + computedPaddingRight
+    end
+
+    if measuredHeight and not computedHeight and (resolvedHeight.unit == "auto" or resolvedHeight.unit == "fit-content") then
+      computedHeight = measuredHeight + computedPaddingTop + computedPaddingBottom
+    end
   end
 
-  computed.width = computedWidth or 0
-  computed.height = computedHeight or 0
+  computed.width = math.floor((computedWidth or 0) + 0.5)
+  computed.height = math.floor((computedHeight or 0) or 0.5)
 
   if not forcedWidth then
-    computed.flexBasis = parentIsMainAxisRow and (computedWidth or 0) or computed.flexBasis
+    computed.flexBasis = parentIsMainAxisRow and computed.width or computed.flexBasis
   end
 
   if not forcedHeight then
-    computed.flexBasis = not parentIsMainAxisRow and (computedHeight or 0) or computed.flexBasis
+    computed.flexBasis = not parentIsMainAxisRow and computed.height or computed.flexBasis
   end
 
   return true
@@ -891,18 +996,14 @@ local function renderer(node, px, py, depth)
   end
 
   local children = node.children
-  local childCount = #children
+  local childCount = children and #children or 0
 
   for i = 1, childCount do
     renderer(children[i], x, y, depth + 1)
   end
 end
 
-local tree = Node(
-  {debug = true, padding = 10, gap = 10},
-  Node({padding = 10, gap = 10}, Node({width = 50, height = 50}), Node({width = 50, height = 50}), Node({width = 50, height = 50})),
-  Node({flexDirection = "column", padding = 10, gap = 10}, Node({width = 50, height = 50}), Node({width = 50, height = 50}), Node({width = 50, height = 50}))
-)
+local tree = Node({padding = 10}, Text({text = "Hello, World!"}))
 
 calculateLayout(tree)
 
