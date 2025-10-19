@@ -106,6 +106,7 @@ local function createAttributes()
     gap = "auto",
     height = "auto",
     justifyContent = "flex-start",
+    material = false,
     padding = "auto",
     paddingBottom = "auto",
     paddingLeft = "auto",
@@ -191,6 +192,19 @@ function Node:constructor(attributes, ...)
 
       computed.textWidth = dxGetTextWidth(attributes.text, attributes.textSize, value)
       computed.textHeight = dxGetFontHeight(attributes.textSize, value)
+    elseif key == "material" then
+      local attributes = self.__attributes
+      local computed = self.computed
+
+      local materialWidth = 0
+      local materialHeight = 0
+
+      if attributes.material then
+        materialWidth, materialHeight = dxGetMaterialSize(attributes.material)
+      end
+
+      computed.materialWidth = materialWidth
+      computed.materialHeight = materialHeight
     end
 
     self:markDirty()
@@ -199,6 +213,8 @@ function Node:constructor(attributes, ...)
   self.computed = {
     flexBasis = 0,
     height = 0,
+    materialHeight = 0,
+    materialWidth = 0,
     textHeight = dxGetFontHeight(1, "default"),
     textWidth = 0,
     width = 0,
@@ -296,6 +312,22 @@ function Text:draw(x, y, width, height, color)
 
   if attributes.text ~= "" then
     dxDrawText(attributes.text, x, y, x + width, y + height, color, attributes.textSize, attributes.font, attributes.textAlignX, attributes.textAlignY, attributes.textClip, false, attributes.textWordWrap, attributes.textColorCoded)
+  end
+end
+
+Image = createClass(Node)
+
+function Image:measure()
+  local computed = self.computed
+
+  return computed.materialWidth, computed.materialHeight
+end
+
+function Image:draw(x, y, width, height, color)
+  local attributes = self.attributes
+
+  if attributes.material then
+    dxDrawImage(x, y, width, height, attributes.material, 0, 0, 0, color)
   end
 end
 
@@ -1031,7 +1063,7 @@ local function renderer(node, px, py, depth)
   end
 end
 
-local tree = Node({padding = 10}, Node({width = 50, height = 100}), Text({text = "Hello, World!", alignSelf = "center"}))
+local tree = Node({padding = 10}, Node({width = 50, height = 100}), Text({text = "Hello, World!", alignSelf = "center"}), Image({width = 100, height = 100, material = dxCreateTexture("layta-white.png")}))
 
 addEventHandler("onClientRender", root, function()
   calculateLayout(tree)
