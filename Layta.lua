@@ -94,6 +94,36 @@ local function getColorAlpha(color)
 	return math.floor(color / 0x1000000) % 0x100
 end
 
+local function hex(hex)
+	hex = hex:gsub("#", "")
+
+	local r, g, b, a
+
+	if #hex == 3 then
+		r = tonumber(hex:sub(1, 1):rep(2), 16)
+		g = tonumber(hex:sub(2, 2):rep(2), 16)
+		b = tonumber(hex:sub(3, 3):rep(2), 16)
+		a = 255
+	elseif #hex == 4 then
+		r = tonumber(hex:sub(1, 1):rep(2), 16)
+		g = tonumber(hex:sub(2, 2):rep(2), 16)
+		b = tonumber(hex:sub(3, 3):rep(2), 16)
+		a = tonumber(hex:sub(4, 4):rep(2), 16)
+	elseif #hex == 6 then
+		r = tonumber(hex:sub(1, 2), 16)
+		g = tonumber(hex:sub(3, 4), 16)
+		b = tonumber(hex:sub(5, 6), 16)
+		a = 255
+	elseif #hex == 8 then
+		r = tonumber(hex:sub(1, 2), 16)
+		g = tonumber(hex:sub(3, 4), 16)
+		b = tonumber(hex:sub(5, 6), 16)
+		a = tonumber(hex:sub(7, 8), 16)
+	end
+
+	return a * 0x1000000 + r * 0x10000 + g * 0x100 + b
+end
+
 local function hue(color)
 	local r = math.floor(color / 0x10000) % 0x100
 	local g = math.floor(color / 0x100) % 0x100
@@ -263,25 +293,7 @@ function Node:constructor(attributes, ...)
 			resolvedAttribute.value, resolvedAttribute.unit = resolveLength(value)
 		end
 
-		if key == "text" then
-			local attributes = self.__attributes
-			local computed = self.computed
-
-			computed.textWidth = dxGetTextWidth(value, attributes.textSize, attributes.font)
-			computed.textHeight = dxGetFontHeight(attributes.textSize, attributes.font)
-		elseif key == "textSize" then
-			local attributes = self.__attributes
-			local computed = self.computed
-
-			computed.textWidth = dxGetTextWidth(attributes.text, value, attributes.font)
-			computed.textHeight = dxGetFontHeight(value, attributes.font)
-		elseif key == "font" then
-			local attributes = self.__attributes
-			local computed = self.computed
-
-			computed.textWidth = dxGetTextWidth(attributes.text, attributes.textSize, value)
-			computed.textHeight = dxGetFontHeight(attributes.textSize, value)
-		elseif key == "material" then
+		if key == "material" then
 			local attributes = self.__attributes
 			local computed = self.computed
 
@@ -394,8 +406,26 @@ Text = createClass(Node)
 
 function Text:measure()
 	local computed = self.computed
+	local computedWidth = computed.width
 
-	return computed.textWidth, computed.textHeight
+	local attributes = self.__attributes
+
+	local font = attributes.font
+
+	local text = attributes.text
+	local textSize = attributes.textSize
+	local textWordWrap = attributes.textWordWrap
+	local textColorCoded = attributes.textColorCoded
+
+	local fontHeight = dxGetFontHeight(textSize, font)
+
+	local textWidth, textHeight = dxGetTextSize(text, computedWidth, textSize, font, textWordWrap, textColorCoded)
+	textHeight = math.max(textHeight, fontHeight)
+
+	computed.textWidth = textWidth
+	computed.textHeight = textHeight
+
+	return textWidth, textHeight
 end
 
 function Text:draw(x, y, width, height, color)
@@ -414,8 +444,8 @@ function Text:draw(x, y, width, height, color)
 			attributes.textAlignX,
 			attributes.textAlignY,
 			attributes.textClip,
-			false,
 			attributes.textWordWrap,
+			false,
 			attributes.textColorCoded
 		)
 	end
@@ -1387,6 +1417,7 @@ Layta = {
 	Node = Node,
 	Text = Text,
 	Image = Image,
+	hex = hex,
 	hsl = hsl,
 	hue = hue,
 	transparent = transparent,
