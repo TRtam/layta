@@ -89,6 +89,7 @@ end
 local function createAttributes()
   return {
     alignItems = "stretch",
+    alignSelf = "auto",
     backgroundColor = 0x00ffffff,
     borderBottomLeftRadius = "auto",
     borderBottomRightRadius = "auto",
@@ -293,7 +294,9 @@ end
 function Text:draw(x, y, width, height, color)
   local attributes = self.attributes
 
-  dxDrawText(self.attributes.text, x, y, x + width, y + height, color, self.attributes.textSize, self.attributes.font, self.attributes.textAlignX, self.attributes.textAlignY, self.attributes.textClip, false, self.attributes.textWordWrap, self.attributes.textColorCoded)
+  if attributes.text ~= "" then
+    dxDrawText(attributes.text, x, y, x + width, y + height, color, attributes.textSize, attributes.font, attributes.textAlignX, attributes.textAlignY, attributes.textClip, false, attributes.textWordWrap, attributes.textColorCoded)
+  end
 end
 
 local splitChildrenIntoLines
@@ -323,7 +326,10 @@ function splitChildrenIntoLines(node, isMainAxisRow, mainAxisDimension, mainAxis
       local childResolvedMainSize = childResolved[mainAxisDimension]
       local childResolvedCrossSize = childResolved[crossAxisDimension]
 
-      if childResolvedMainSize.unit == "percentage" and containerMainSize == nil or childResolvedCrossSize.unit == "auto" and stretchChildren and containerCrossSize == nil then
+      local childAttributes = child.__attributes
+      local childAlignSelf = childAttributes.alignSelf
+
+      if childResolvedMainSize.unit == "percentage" and containerMainSize == nil or (childResolvedCrossSize.unit == "auto" and stretchChildren and (childAlignSelf == "auto" or childAlignSelf == "stretch")) and containerCrossSize == nil then
         if not secondPassChildren then secondPassChildren = {} end
         table.insert(secondPassChildren, child)
       end
@@ -388,13 +394,16 @@ function calculateLayout(node, availableWidth, availableHeight, forcedWidth, for
   local computedWidth
   local computedHeight
 
+  local attributes = node.__attributes
+  local alignSelf = attributes.alignSelf
+
   if forcedWidth then
     computedWidth = forcedWidth
   elseif resolvedWidth.unit == "pixel" then
     computedWidth = resolvedWidth.value
   elseif resolvedWidth.unit == "percentage" and availableWidth then
     computedWidth = resolvedWidth.value * availableWidth
-  elseif resolvedWidth.unit == "auto" and not parentIsMainAxisRow and parentStretchChildren and availableWidth then
+  elseif resolvedWidth.unit == "auto" and not parentIsMainAxisRow and parentStretchChildren and (alignSelf == "auto" or alignSelf == "stretch") and availableWidth then
     computedWidth = availableWidth
   end
 
@@ -404,11 +413,9 @@ function calculateLayout(node, availableWidth, availableHeight, forcedWidth, for
     computedHeight = resolvedHeight.value
   elseif resolvedHeight.unit == "percentage" and availableHeight then
     computedHeight = resolvedHeight.value * availableHeight
-  elseif resolvedHeight.unit == "auto" and parentIsMainAxisRow and parentStretchChildren and availableHeight then
+  elseif resolvedHeight.unit == "auto" and parentIsMainAxisRow and parentStretchChildren and (alignSelf == "auto" or alignSelf == "stretch") and availableHeight then
     computedHeight = availableHeight
   end
-
-  local attributes = node.attributes
 
   local flexDirection = attributes.flexDirection
   local isMainAxisRow = flexDirection == "row" or flexDirection == "row-reverse"
@@ -505,9 +512,9 @@ function calculateLayout(node, availableWidth, availableHeight, forcedWidth, for
       containerCrossInnerSize = math.max(containerCrossSize - paddingCrossStart - paddingCrossEnd, 0)
     end
 
-    if not parentIsMainAxisRow and parentStretchChildren and resolvedWidth.unit == "auto" and availableWidth then
+    if not parentIsMainAxisRow and parentStretchChildren and resolvedWidth.unit == "auto" and (alignSelf == "auto" or alignSelf == "stretch") and availableWidth then
       computedWidth = math.max(computedWidth, availableWidth)
-    elseif parentIsMainAxisRow and parentStretchChildren and resolvedHeight.unit == "auto" and availableHeight then
+    elseif parentIsMainAxisRow and parentStretchChildren and resolvedHeight.unit == "auto" and (alignSelf == "auto" or alignSelf == "stretch") and availableHeight then
       computedHeight = math.max(computedHeight, availableHeight)
     end
 
@@ -533,9 +540,9 @@ function calculateLayout(node, availableWidth, availableHeight, forcedWidth, for
         containerCrossInnerSize = math.max(containerCrossSize - paddingCrossStart - paddingCrossEnd, 0)
       end
 
-      if not parentIsMainAxisRow and parentStretchChildren and resolvedWidth.unit == "auto" and availableWidth then
+      if not parentIsMainAxisRow and parentStretchChildren and resolvedWidth.unit == "auto" and (alignSelf == "auto" or alignSelf == "stretch") and availableWidth then
         computedWidth = math.max(computedWidth, availableWidth)
-      elseif parentIsMainAxisRow and parentStretchChildren and resolvedHeight.unit == "auto" and availableHeight then
+      elseif parentIsMainAxisRow and parentStretchChildren and resolvedHeight.unit == "auto" and (alignSelf == "auto" or alignSelf == "stretch") and availableHeight then
         computedHeight = math.max(computedHeight, availableHeight)
       end
     end
@@ -856,7 +863,7 @@ local function renderer(node, px, py, depth)
 
   local usingRectangleShader = renderBorderTopLeftRadius > 0 or renderBorderTopRightRadius > 0 or renderBorderBottomLeftRadius > 0 or renderBorderBottomRightRadius > 0
 
-  local attributes = node.attributes
+  local attributes = node.__attributes
   local backgroundColor = hsl(0, 0, 0.15 + depth * 0.025) -- attributes.backgroundColor
   local strokeColor = hsl(0, 0, 0.2 + depth * 0.025)      -- attributes.strokeColor
   local color = attributes.color
@@ -1003,9 +1010,11 @@ local function renderer(node, px, py, depth)
   end
 end
 
-local tree = Node({padding = 10}, Text({text = "Hello, World!"}))
+local tree = Node({padding = 10, height = 100}, Text({text = "Hello, World!"}))
 
-calculateLayout(tree)
+addEventHandler("onClientRender", root, function()
+  calculateLayout(tree)
+end)
 
 addEventHandler("onClientRender", root, function()
   renderer(tree, 0, 0, 0)
