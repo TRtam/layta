@@ -86,9 +86,148 @@ local function resolveLength(length)
 	end
 end
 
-local transparent = 0x00ffffff
-local white = 0xffffffff
+local aliceblue = 0xFFF0F8FF
+local antiquewhite = 0xFFFAEBD7
+local aqua = 0xFF00FFFF
+local aquamarine = 0xFF7FFFD4
+local azure = 0xFFF0FFFF
+local beige = 0xFFF5F5DC
+local bisque = 0xFFFFE4C4
 local black = 0xff000000
+local blanchedalmond = 0xFFFFEBCD
+local blue = 0xFF0000FF
+local blueviolet = 0xFF8A2BE2
+local brown = 0xFFA52A2A
+local burlywood = 0xFFDEB887
+local cadetblue = 0xFF5F9EA0
+local chartreuse = 0xFF7FFF00
+local chocolate = 0xFFD2691E
+local coral = 0xFFFF7F50
+local cornflowerblue = 0xFF6495ED
+local cornsilk = 0xFFFFF8DC
+local crimson = 0xFFDC143C
+local cyan = 0xFF00FFFF
+local darkblue = 0xFF00008B
+local darkcyan = 0xFF008B8B
+local darkgoldenrod = 0xFFB8860B
+local darkgray = 0xFFA9A9A9
+local darkgreen = 0xFF006400
+local darkkhaki = 0xFFBDB76B
+local darkmagenta = 0xFF8B008B
+local darkolivegreen = 0xFF556B2F
+local darkorange = 0xFFFF8C00
+local darkorchid = 0xFF9932CC
+local darkred = 0xFF8B0000
+local darksalmon = 0xFFE9967A
+local darkseagreen = 0xFF8FBC8B
+local darkslateblue = 0xFF483D8B
+local darkslategray = 0xFF2F4F4F
+local darkturquoise = 0xFF00CED1
+local darkviolet = 0xFF9400D3
+local deeppink = 0xFFFF1493
+local deepskyblue = 0xFF00BFFF
+local dimgray = 0xFF696969
+local dodgerblue = 0xFF1E90FF
+local firebrick = 0xFFB22222
+local floralwhite = 0xFFFFFAF0
+local forestgreen = 0xFF228B22
+local fuchsia = 0xFFFF00FF
+local gainsboro = 0xFFDCDCDC
+local ghostwhite = 0xFFF8F8FF
+local gold = 0xFFFFD700
+local goldenrod = 0xFFDAA520
+local gray = 0xFF808080
+local green = 0xFF008000
+local greenyellow = 0xFFADFF2F
+local honeydew = 0xFFF0FFF0
+local hotpink = 0xFFFF69B4
+local indianred = 0xFFCD5C5C
+local indigo = 0xFF4B0082
+local ivory = 0xFFFFFFF0
+local khaki = 0xFFF0E68C
+local lavender = 0xFFE6E6FA
+local lavenderblush = 0xFFFFF0F5
+local lawngreen = 0xFF7CFC00
+local lemonchiffon = 0xFFFFFACD
+local lightblue = 0xFFADD8E6
+local lightcoral = 0xFFF08080
+local lightcyan = 0xFFE0FFFF
+local lightgoldenrodyellow = 0xFFFAFAD2
+local lightgray = 0xFFD3D3D3
+local lightgreen = 0xFF90EE90
+local lightpink = 0xFFFFB6C1
+local lightsalmon = 0xFFFFA07A
+local lightseagreen = 0xFF20B2AA
+local lightskyblue = 0xFF87CEFA
+local lightslategray = 0xFF778899
+local lightsteelblue = 0xFFB0C4DE
+local lightyellow = 0xFFFFFFE0
+local lime = 0xFF00FF00
+local limegreen = 0xFF32CD32
+local linen = 0xFFFAF0E6
+local magenta = 0xFFFF00FF
+local maroon = 0xFF800000
+local mediumaquamarine = 0xFF66CDAA
+local mediumblue = 0xFF0000CD
+local mediumorchid = 0xFFBA55D3
+local mediumpurple = 0xFF9370DB
+local mediumseagreen = 0xFF3CB371
+local mediumslateblue = 0xFF7B68EE
+local mediumspringgreen = 0xFF00FA9A
+local mediumturquoise = 0xFF48D1CC
+local mediumvioletred = 0xFFC71585
+local midnightblue = 0xFF191970
+local mintcream = 0xFFF5FFFA
+local mistyrose = 0xFFFFE4E1
+local moccasin = 0xFFFFE4B5
+local navajowhite = 0xFFFFDEAD
+local navy = 0xFF000080
+local oldlace = 0xFFFDF5E6
+local olive = 0xFF808000
+local olivedrab = 0xFF6B8E23
+local orange = 0xFFFFA500
+local orangered = 0xFFFF4500
+local orchid = 0xFFDA70D6
+local palegoldenrod = 0xFFEEE8AA
+local palegreen = 0xFF98FB98
+local paleturquoise = 0xFFAFEEEE
+local palevioletred = 0xFFDB7093
+local papayawhip = 0xFFFFEFD5
+local peachpuff = 0xFFFFDAB9
+local peru = 0xFFCD853F
+local pink = 0xFFFFC0CB
+local plum = 0xFFDDA0DD
+local powderblue = 0xFFB0E0E6
+local purple = 0xFF800080
+local rebeccapurple = 0xFF663399
+local red = 0xFFFF0000
+local rosybrown = 0xFFBC8F8F
+local royalblue = 0xFF4169E1
+local saddlebrown = 0xFF8B4513
+local salmon = 0xFFFA8072
+local sandybrown = 0xFFF4A460
+local seagreen = 0xFF2E8B57
+local seashell = 0xFFFFF5EE
+local sienna = 0xFFA0522D
+local silver = 0xFFC0C0C0
+local skyblue = 0xFF87CEEB
+local slateblue = 0xFF6A5ACD
+local slategray = 0xFF708090
+local snow = 0xFFFFFAFA
+local springgreen = 0xFF00FF7F
+local steelblue = 0xFF4682B4
+local tan = 0xFFD2B48C
+local teal = 0xFF008080
+local thistle = 0xFFD8BFD8
+local tomato = 0xFFFF6347
+local transparent = 0x00ffffff
+local turquoise = 0xFF40E0D0
+local violet = 0xFFEE82EE
+local wheat = 0xFFF5DEB3
+local white = 0xffffffff
+local whitesmoke = 0xFFF5F5F5
+local yellow = 0xFFFFFF00
+local yellowgreen = 0xFF9ACD32
 
 local function getColorAlpha(color)
 	return math.floor(color / 0x1000000) % 0x100
@@ -261,6 +400,8 @@ function Node:constructor(attributes, ...)
 
 	self.dirty = true
 
+	self.states = { hovered = false, clicked = false }
+
 	self.resolved = {
 		borderBottomLeftRadius = { value = 0, unit = "auto" },
 		borderBottomRightRadius = { value = 0, unit = "auto" },
@@ -323,9 +464,49 @@ function Node:constructor(attributes, ...)
 		y = 0,
 	}
 
-	self.render = {}
+	self.render = {
+		width = 0,
+		height = 0,
+		x = 0,
+		y = 0,
+	}
 
 	if attributes then
+		if attributes.onCursorEnter then
+			self.onCursorEnter = attributes.onCursorEnter
+			attributes.onCursorEnter = nil
+		end
+
+		if attributes.onCursorLeave then
+			self.onCursorLeave = attributes.onCursorLeave
+			attributes.onCursorLeave = nil
+		end
+
+		if attributes.onCursorOver then
+			self.onCursorOver = attributes.onCursorOver
+			attributes.onCursorOver = nil
+		end
+
+		if attributes.onCursorOut then
+			self.onCursorOut = attributes.onCursorOut
+			attributes.onCursorOut = nil
+		end
+
+		if attributes.onCursorDown then
+			self.onCursorDown = attributes.onCursorDown
+			attributes.onCursorDown = nil
+		end
+
+		if attributes.onCursorUp then
+			self.onCursorUp = attributes.onCursorUp
+			attributes.onCursorUp = nil
+		end
+
+		if attributes.onClick then
+			self.onClick = attributes.onClick
+			attributes.onClick = nil
+		end
+
 		for key, value in pairs(attributes) do
 			self.attributes[key] = value
 		end
@@ -1246,6 +1427,12 @@ local function renderer(node, pX, pY, pColor)
 
 	local render = node.render
 
+	render.width = computedWidth
+	render.height = computedHeight
+
+	render.x = x
+	render.y = y
+
 	local renderBackgroundShader = render.backgroundShader
 	local hasBackground = getColorAlpha(backgroundColor) > 0
 
@@ -1406,6 +1593,152 @@ end
 
 local tree = Node()
 
+local function getHoveredNode(cursorX, cursorY, node)
+	local attributes = node.__attributes
+
+	if not attributes.visible then
+		return nil
+	end
+
+	local hoveredNode
+
+	local render = node.render
+
+	local renderWidth = render.width
+	local renderHeight = render.height
+
+	local renderX = render.x
+	local renderY = render.y
+
+	if not cursorX or not cursorY or not renderX or not renderY then
+		print("failed?")
+	end
+
+	local hovering = cursorX >= renderX
+		and cursorY >= renderY
+		and cursorX <= renderX + renderWidth
+		and cursorY <= renderY + renderHeight
+
+	local states = node.states
+
+	if hovering and not states.hovered then
+		states.hovered = true
+
+		if node.onCursorEnter then
+			node:onCursorEnter(cursorX, cursorY)
+		end
+	elseif not hovering and states.hovered then
+		states.hovered = false
+
+		if node.onCursorLeave then
+			node:onCursorLeave(cursorX, cursorY)
+		end
+	end
+
+	local children = node.children
+	local childCount = #children
+
+	for i = 1, childCount do
+		local child = children[i]
+		local childAttributes = child.__attributes
+
+		if childAttributes.visible then
+			local hoveredChild = getHoveredNode(cursorX, cursorY, child)
+
+			if hoveredChild then
+				hoveredNode = hoveredChild
+			end
+		end
+	end
+
+	if hovering and not hoveredNode then
+		hoveredNode = node
+	end
+
+	return hoveredNode
+end
+
+local cursorHoveredNode
+
+local cursorX = -screenWidth
+local cursorY = -screenHeight
+
+local cursorButton = {
+	left = { pressed = false, clickedNode = false },
+	middle = { pressed = false, clickedNode = false },
+	right = { pressed = false, clickedNode = false },
+}
+
+local function cursor()
+	local cursorShowing = isCursorShowing()
+
+	if cursorShowing then
+		cursorX, cursorY = getCursorPosition()
+
+		cursorX = cursorX * screenWidth
+		cursorY = cursorY * screenHeight
+
+		local hoveredNode = getHoveredNode(cursorX, cursorY, tree)
+
+		if hoveredNode ~= cursorHoveredNode then
+			if cursorHoveredNode and cursorHoveredNode.onCursorOut then
+				cursorHoveredNode:onCursorOut(cursorX, cursorY)
+			end
+
+			cursorHoveredNode = hoveredNode
+
+			if cursorHoveredNode and cursorHoveredNode.onCursorOver then
+				cursorHoveredNode:onCursorOver(cursorX, cursorY)
+			end
+		end
+	else
+		cursorX = -screenWidth
+		cursorY = -screenHeight
+	end
+end
+
+addEventHandler("onClientRender", root, function()
+	cursor(tree)
+end)
+
+addEventHandler("onClientClick", root, function(button, state)
+	local data = cursorButton[button]
+
+	data.x = cursorX
+	data.y = cursorY
+
+	local pressed = state == "down"
+	data.pressed = pressed
+
+	if pressed then
+		if cursorHoveredNode then
+			cursorHoveredNode.states.clicked = true
+
+			data.clickedNode = cursorHoveredNode
+
+			if cursorHoveredNode.onCursorDown then
+				cursorHoveredNode:onCursorDown(button, pressed, cursorX, cursorY)
+			end
+		end
+	else
+		local cursorClickedNode = data.clickedNode
+
+		if cursorClickedNode then
+			cursorClickedNode.states.clicked = false
+
+			if cursorClickedNode.onCursorUp then
+				cursorClickedNode:onCursorUp(button, pressed, cursorX, cursorY)
+			end
+
+			if cursorClickedNode == cursorHoveredNode and cursorClickedNode.onClick then
+				cursorClickedNode:onClick(button, cursorX, cursorY)
+			end
+
+			data.clickedNode = false
+		end
+	end
+end)
+
 addEventHandler("onClientRender", root, function()
 	calculateLayout(tree, screenWidth, nil, nil, nil, false, true)
 end)
@@ -1424,5 +1757,144 @@ Layta = {
 	transparent = transparent,
 	white = white,
 	black = black,
+	aliceblue = aliceblue,
+	antiquewhite = antiquewhite,
+	aqua = aqua,
+	aquamarine = aquamarine,
+	azure = azure,
+	beige = beige,
+	bisque = bisque,
+	blanchedalmond = blanchedalmond,
+	blue = blue,
+	blueviolet = blueviolet,
+	brown = brown,
+	burlywood = burlywood,
+	cadetblue = cadetblue,
+	chartreuse = chartreuse,
+	chocolate = chocolate,
+	coral = coral,
+	cornflowerblue = cornflowerblue,
+	cornsilk = cornsilk,
+	crimson = crimson,
+	cyan = cyan,
+	darkblue = darkblue,
+	darkcyan = darkcyan,
+	darkgoldenrod = darkgoldenrod,
+	darkgray = darkgray,
+	darkgreen = darkgreen,
+	darkkhaki = darkkhaki,
+	darkmagenta = darkmagenta,
+	darkolivegreen = darkolivegreen,
+	darkorange = darkorange,
+	darkorchid = darkorchid,
+	darkred = darkred,
+	darksalmon = darksalmon,
+	darkseagreen = darkseagreen,
+	darkslateblue = darkslateblue,
+	darkslategray = darkslategray,
+	darkturquoise = darkturquoise,
+	darkviolet = darkviolet,
+	deeppink = deeppink,
+	deepskyblue = deepskyblue,
+	dimgray = dimgray,
+	dodgerblue = dodgerblue,
+	firebrick = firebrick,
+	floralwhite = floralwhite,
+	forestgreen = forestgreen,
+	fuchsia = fuchsia,
+	gainsboro = gainsboro,
+	ghostwhite = ghostwhite,
+	gold = gold,
+	goldenrod = goldenrod,
+	gray = gray,
+	green = green,
+	greenyellow = greenyellow,
+	honeydew = honeydew,
+	hotpink = hotpink,
+	indianred = indianred,
+	indigo = indigo,
+	ivory = ivory,
+	khaki = khaki,
+	lavender = lavender,
+	lavenderblush = lavenderblush,
+	lawngreen = lawngreen,
+	lemonchiffon = lemonchiffon,
+	lightblue = lightblue,
+	lightcoral = lightcoral,
+	lightcyan = lightcyan,
+	lightgoldenrodyellow = lightgoldenrodyellow,
+	lightgray = lightgray,
+	lightgreen = lightgreen,
+	lightpink = lightpink,
+	lightsalmon = lightsalmon,
+	lightseagreen = lightseagreen,
+	lightskyblue = lightskyblue,
+	lightslategray = lightslategray,
+	lightsteelblue = lightsteelblue,
+	lightyellow = lightyellow,
+	lime = lime,
+	limegreen = limegreen,
+	linen = linen,
+	magenta = magenta,
+	maroon = maroon,
+	mediumaquamarine = mediumaquamarine,
+	mediumblue = mediumblue,
+	mediumorchid = mediumorchid,
+	mediumpurple = mediumpurple,
+	mediumseagreen = mediumseagreen,
+	mediumslateblue = mediumslateblue,
+	mediumspringgreen = mediumspringgreen,
+	mediumturquoise = mediumturquoise,
+	mediumvioletred = mediumvioletred,
+	midnightblue = midnightblue,
+	mintcream = mintcream,
+	mistyrose = mistyrose,
+	moccasin = moccasin,
+	navajowhite = navajowhite,
+	navy = navy,
+	oldlace = oldlace,
+	olive = olive,
+	olivedrab = olivedrab,
+	orange = orange,
+	orangered = orangered,
+	orchid = orchid,
+	palegoldenrod = palegoldenrod,
+	palegreen = palegreen,
+	paleturquoise = paleturquoise,
+	palevioletred = palevioletred,
+	papayawhip = papayawhip,
+	peachpuff = peachpuff,
+	peru = peru,
+	pink = pink,
+	plum = plum,
+	powderblue = powderblue,
+	purple = purple,
+	rebeccapurple = rebeccapurple,
+	red = red,
+	rosybrown = rosybrown,
+	royalblue = royalblue,
+	saddlebrown = saddlebrown,
+	salmon = salmon,
+	sandybrown = sandybrown,
+	seagreen = seagreen,
+	seashell = seashell,
+	sienna = sienna,
+	silver = silver,
+	skyblue = skyblue,
+	slateblue = slateblue,
+	slategray = slategray,
+	snow = snow,
+	springgreen = springgreen,
+	steelblue = steelblue,
+	tan = tan,
+	teal = teal,
+	thistle = thistle,
+	tomato = tomato,
+	turquoise = turquoise,
+	violet = violet,
+	wheat = wheat,
+	whitesmoke = whitesmoke,
+	yellow = yellow,
+	yellowgreen = yellowgreen,
 	tree = tree,
 }
