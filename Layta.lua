@@ -354,6 +354,7 @@ local function createAttributes()
 		borderRadius = "auto",
 		borderTopLeftRadius = "auto",
 		borderTopRightRadius = "auto",
+		bottom = "auto",
 		color = false,
 		display = "flex",
 		flexDirection = "row",
@@ -364,6 +365,7 @@ local function createAttributes()
 		gap = "auto",
 		height = "auto",
 		justifyContent = "flex-start",
+		left = "auto",
 		material = false,
 		padding = "auto",
 		paddingBottom = "auto",
@@ -371,6 +373,7 @@ local function createAttributes()
 		paddingRight = "auto",
 		paddingTop = "auto",
 		position = "relative",
+		right = "auto",
 		strokeBottomWeight = "auto",
 		strokeColor = black,
 		strokeLeftWeight = "auto",
@@ -384,6 +387,7 @@ local function createAttributes()
 		textColorCoded = false,
 		textSize = 1,
 		textWordWrap = false,
+		top = "auto",
 		visible = true,
 		width = "auto",
 	}
@@ -408,20 +412,24 @@ function Node:constructor(attributes, ...)
 		borderRadius = { value = 0, unit = "auto" },
 		borderTopLeftRadius = { value = 0, unit = "auto" },
 		borderTopRightRadius = { value = 0, unit = "auto" },
+		bottom = { value = 0, unit = "auto" },
 		flexGrow = { value = 0, unit = "pixel" },
 		flexShrink = { value = 0, unit = "pixel" },
 		gap = { value = 0, unit = "auto" },
 		height = { value = 0, unit = "auto" },
+		left = { value = 0, unit = "auto" },
 		padding = { value = 0, unit = "auto" },
 		paddingBottom = { value = 0, unit = "auto" },
 		paddingLeft = { value = 0, unit = "auto" },
 		paddingRight = { value = 0, unit = "auto" },
 		paddingTop = { value = 0, unit = "auto" },
+		right = { value = 0, unit = "auto" },
 		strokeBottomWeight = { value = 0, unit = "auto" },
 		strokeLeftWeight = { value = 0, unit = "auto" },
 		strokeRightWeight = { value = 0, unit = "auto" },
 		strokeTopWeight = { value = 0, unit = "auto" },
 		strokeWeight = { value = 0, unit = "auto" },
+		top = { value = 0, unit = "auto" },
 		width = { value = 0, unit = "auto" },
 	}
 
@@ -453,20 +461,24 @@ function Node:constructor(attributes, ...)
 	end)
 
 	self.computed = {
+		bottom = 0,
 		flexBasis = 0,
 		height = 0,
+		left = 0,
 		materialHeight = 0,
 		materialWidth = 0,
+		right = 0,
 		textHeight = dxGetFontHeight(1, "default"),
 		textWidth = 0,
+		top = 0,
 		width = 0,
 		x = 0,
 		y = 0,
 	}
 
 	self.render = {
-		width = 0,
 		height = 0,
+		width = 0,
 		x = 0,
 		y = 0,
 	}
@@ -693,9 +705,13 @@ function splitChildrenIntoLines(
 	local secondPassChildren
 	local thirdPassChildren
 
+	local absoluteChildren
+
 	for i = 1, childcount do
 		local child = children[i]
+
 		local childAttributes = child.__attributes
+		local childPosition = childAttributes.position
 
 		if childAttributes.visible then
 			local childResolved = child.resolved
@@ -721,6 +737,7 @@ function splitChildrenIntoLines(
 						childResolvedCrossSize.unit == "auto"
 							and stretchChildren
 							and (childAlignSelf == "auto" or childAlignSelf == "stretch")
+							and childPosition == "relative"
 						or childResolvedCrossSize.unit == "percentage" and containerCrossSize == nil
 					)
 				then
@@ -729,62 +746,74 @@ function splitChildrenIntoLines(
 					end
 					table.insert(secondPassChildren, child)
 				end
-			end
 
-			local childComputed = child.computed
-			local childComputedMainSize = not doingThirdPass and childComputed.flexBasis
-				or childComputed[mainAxisDimension]
-			local childComputedCrossSize = childComputed[crossAxisDimension]
+				if childPosition == "absolute" then
+					if not absoluteChildren then
+						absoluteChildren = {}
+					end
 
-			if
-				flexCanWrap
-				and #currentLine > 1
-				and currentLine[mainAxisDimension] + gapMain + childComputedMainSize > containerMainInnerSize
-			then
-				local previousLine = currentLine
-
-				currentLine = {
-					[mainAxisDimension] = 0,
-					[mainAxisPosition] = paddingMainStart,
-					[crossAxisDimension] = 0,
-					[crossAxisPosition] = gapCross + previousLine[crossAxisPosition] + previousLine[crossAxisDimension],
-					remainingFreeSpace = 0,
-					totalFlexGrowFactor = 0,
-					totalFlexShrinkScaledFactor = 0,
-				}
-
-				table.insert(flexLines, currentLine)
-			end
-
-			table.insert(currentLine, child)
-
-			currentLine[mainAxisDimension] = currentLine[mainAxisDimension]
-				+ (#currentLine > 0 and i < childcount and gapMain or 0)
-				+ childComputedMainSize
-			currentLine[crossAxisDimension] = math.max(currentLine[crossAxisDimension], childComputedCrossSize)
-
-			if containerMainSize ~= nil then
-				currentLine.remainingFreeSpace = containerMainInnerSize - currentLine[mainAxisDimension]
-			end
-
-			linesMainMaximumLineSize =
-				math.max(linesMainMaximumLineSize, currentLine[mainAxisPosition] + currentLine[mainAxisDimension])
-			linesCrossTotalLinesSize =
-				math.max(linesCrossTotalLinesSize, currentLine[crossAxisPosition] + currentLine[crossAxisDimension])
-
-			local childFlexGrow = childResolved.flexGrow.value
-			local childFlexShrink = childResolved.flexShrink.value
-
-			if childFlexGrow > 0 or childFlexShrink > 0 then
-				currentLine.totalFlexGrowFactor = currentLine.totalFlexGrowFactor + childFlexGrow
-				currentLine.totalFlexShrinkScaledFactor = currentLine.totalFlexShrinkScaledFactor
-					+ childFlexShrink * childComputedMainSize
-
-				if not thirdPassChildren then
-					thirdPassChildren = {}
+					table.insert(absoluteChildren, child)
 				end
-				table.insert(thirdPassChildren, child)
-				thirdPassChildren[child] = currentLine
+			end
+
+			if childPosition == "relative" then
+				local childComputed = child.computed
+				local childComputedMainSize = not doingThirdPass and childComputed.flexBasis
+					or childComputed[mainAxisDimension]
+				local childComputedCrossSize = childComputed[crossAxisDimension]
+
+				if
+					flexCanWrap
+					and #currentLine > 1
+					and currentLine[mainAxisDimension] + gapMain + childComputedMainSize > containerMainInnerSize
+				then
+					local previousLine = currentLine
+
+					currentLine = {
+						[mainAxisDimension] = 0,
+						[mainAxisPosition] = paddingMainStart,
+						[crossAxisDimension] = 0,
+						[crossAxisPosition] = gapCross
+							+ previousLine[crossAxisPosition]
+							+ previousLine[crossAxisDimension],
+						remainingFreeSpace = 0,
+						totalFlexGrowFactor = 0,
+						totalFlexShrinkScaledFactor = 0,
+					}
+
+					table.insert(flexLines, currentLine)
+				end
+
+				table.insert(currentLine, child)
+
+				currentLine[mainAxisDimension] = currentLine[mainAxisDimension]
+					+ (#currentLine > 0 and i < childcount and gapMain or 0)
+					+ childComputedMainSize
+				currentLine[crossAxisDimension] = math.max(currentLine[crossAxisDimension], childComputedCrossSize)
+
+				if containerMainSize ~= nil then
+					currentLine.remainingFreeSpace = containerMainInnerSize - currentLine[mainAxisDimension]
+				end
+
+				linesMainMaximumLineSize =
+					math.max(linesMainMaximumLineSize, currentLine[mainAxisPosition] + currentLine[mainAxisDimension])
+				linesCrossTotalLinesSize =
+					math.max(linesCrossTotalLinesSize, currentLine[crossAxisPosition] + currentLine[crossAxisDimension])
+
+				local childFlexGrow = childResolved.flexGrow.value
+				local childFlexShrink = childResolved.flexShrink.value
+
+				if childFlexGrow > 0 or childFlexShrink > 0 then
+					currentLine.totalFlexGrowFactor = currentLine.totalFlexGrowFactor + childFlexGrow
+					currentLine.totalFlexShrinkScaledFactor = currentLine.totalFlexShrinkScaledFactor
+						+ childFlexShrink * childComputedMainSize
+
+					if not thirdPassChildren then
+						thirdPassChildren = {}
+					end
+					table.insert(thirdPassChildren, child)
+					thirdPassChildren[child] = currentLine
+				end
 			end
 		end
 	end
@@ -793,7 +822,8 @@ function splitChildrenIntoLines(
 		linesMainMaximumLineSize - paddingMainStart,
 		linesCrossTotalLinesSize - paddingCrossStart,
 		secondPassChildren,
-		thirdPassChildren
+		thirdPassChildren,
+		absoluteChildren
 end
 
 function calculateLayout(
@@ -852,6 +882,43 @@ function calculateLayout(
 		and availableHeight
 	then
 		computedHeight = availableHeight
+	end
+
+	local resolvedLeft = resolved.left
+	local resolvedTop = resolved.top
+	local resolvedRight = resolved.right
+	local resolvedBottom = resolved.bottom
+
+	if resolvedLeft.unit == "pixel" then
+		computed.left = resolvedLeft.value
+	elseif resolvedLeft.unit == "percentage" and availableWidth then
+		computed.left = resolvedLeft.value * availableWidth
+	else
+		computed.left = 0
+	end
+
+	if resolvedTop.unit == "pixel" then
+		computed.top = resolvedTop.value
+	elseif resolvedTop.unit == "percentage" and availableHeight then
+		computed.top = resolvedTop.value * availableHeight
+	else
+		computed.top = 0
+	end
+
+	if resolvedRight.unit == "pixel" then
+		computed.right = resolvedRight.value
+	elseif resolvedRight.unit == "percentage" and availableWidth then
+		computed.right = resolvedRight.value * availableWidth
+	else
+		computed.right = 0
+	end
+
+	if resolvedBottom.unit == "pixel" then
+		computed.bottom = resolvedBottom.value
+	elseif resolvedBottom.unit == "percentage" and availableHeight then
+		computed.bottom = resolvedBottom.value * availableHeight
+	else
+		computed.bottom = 0
 	end
 
 	local flexDirection = attributes.flexDirection
@@ -928,7 +995,7 @@ function calculateLayout(
 	local childcount = children and #children or 0
 
 	if childcount > 0 then
-		local flexLines, linesMainMaximumLineSize, linesCrossTotalLinesSize, secondPassChildren, thirdPassChildren =
+		local flexLines, linesMainMaximumLineSize, linesCrossTotalLinesSize, secondPassChildren, thirdPassChildren, absoluteChildren =
 			splitChildrenIntoLines(
 				node,
 				isMainAxisRow,
@@ -1195,6 +1262,32 @@ function calculateLayout(
 					+ childComputed[mainAxisDimension]
 					+ gapMain
 					+ currentLineJustifyContentGap
+			end
+		end
+
+		if absoluteChildren then
+			for i = 1, #absoluteChildren do
+				local child = absoluteChildren[i]
+
+				local childResolved = child.resolved
+
+				local resolvedLeft = childResolved.left
+				local resolvedTop = childResolved.top
+
+				local resolvedRight = childResolved.right
+				local resolvedBottom = childResolved.bottom
+
+				local childComputed = child.computed
+
+				local childComputedWidth = childComputed.width
+				local childComputedHeight = childComputed.height
+
+				childComputed.x = resolvedLeft.unit ~= "auto" and childComputed.left
+					or resolvedRight.unit ~= "auto" and computedWidth - childComputed.right - childComputedWidth
+					or 0
+				childComputed.y = resolvedTop.unit ~= "auto" and childComputed.top
+					or resolvedBottom.unit ~= "auto" and computedHeight - childComputed.bottom - childComputedHeight
+					or 0
 			end
 		end
 	else
@@ -1609,10 +1702,6 @@ local function getHoveredNode(cursorX, cursorY, node)
 
 	local renderX = render.x
 	local renderY = render.y
-
-	if not cursorX or not cursorY or not renderX or not renderY then
-		print("failed?")
-	end
 
 	local hovering = cursorX >= renderX
 		and cursorY >= renderY
