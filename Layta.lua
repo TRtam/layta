@@ -717,14 +717,25 @@ function splitChildrenIntoLines(
 			local childResolved = child.resolved
 
 			if not doingSecondPass then
-				local availableWidth = isMainAxisRow and containerMainSize ~= nil and containerMainInnerSize
-					or not isMainAxisRow and containerCrossSize ~= nil and containerCrossInnerSize
-					or nil
-				local availableHeight = isMainAxisRow and containerCrossSize ~= nil and containerCrossInnerSize
-					or not isMainAxisRow and containerMainSize ~= nil and containerMainInnerSize
-					or nil
+				if childPosition == "absolute" then
+					local availableWidth = isMainAxisRow and containerMainSize ~= nil and containerMainSize
+						or not isMainAxisRow and containerCrossSize ~= nil and containerCrossSize
+						or nil
+					local availableHeight = isMainAxisRow and containerCrossSize ~= nil and containerCrossSize
+						or not isMainAxisRow and containerMainSize ~= nil and containerMainSize
+						or nil
 
-				calculateLayout(child, availableWidth, availableHeight, nil, nil, isMainAxisRow, stretchChildren)
+					calculateLayout(child, availableWidth, availableHeight, nil, nil, isMainAxisRow, stretchChildren)
+				elseif childPosition == "relative" then
+					local availableWidth = isMainAxisRow and containerMainSize ~= nil and containerMainInnerSize
+						or not isMainAxisRow and containerCrossSize ~= nil and containerCrossInnerSize
+						or nil
+					local availableHeight = isMainAxisRow and containerCrossSize ~= nil and containerCrossInnerSize
+						or not isMainAxisRow and containerMainSize ~= nil and containerMainInnerSize
+						or nil
+
+					calculateLayout(child, availableWidth, availableHeight, nil, nil, isMainAxisRow, stretchChildren)
+				end
 
 				local childResolvedMainSize = childResolved[mainAxisDimension]
 				local childResolvedCrossSize = childResolved[crossAxisDimension]
@@ -1257,6 +1268,27 @@ function calculateLayout(
 
 				childComputed[mainAxisPosition] = math.floor(caretMainPosition + 0.5)
 				childComputed[crossAxisPosition] = math.floor((caretCrossPosition + childCrossOffset) + 0.5)
+
+				local childResolved = child.resolved
+
+				local resolvedLeft = childResolved.left
+				local resolvedTop = childResolved.top
+
+				local resolvedRight = childResolved.right
+				local resolvedBottom = childResolved.bottom
+
+				childComputed.x = childComputed.x
+					+ (
+						resolvedLeft.unit ~= "auto" and childComputed.left
+						or resolvedRight.unit ~= "auto" and computedWidth - childComputed.right - childComputed.width
+						or 0
+					)
+				childComputed.y = childComputed.y
+					+ (
+						resolvedTop.unit ~= "auto" and childComputed.top
+						or resolvedBottom.unit ~= "auto" and computedHeight - childComputed.bottom - childComputed.height
+						or 0
+					)
 
 				caretMainPosition = caretMainPosition
 					+ childComputed[mainAxisDimension]
