@@ -5,13 +5,9 @@ local function createClass(super)
 	local class
 	class = {}
 	class.__index = class
-	function class:constructor()
-	end
 	function class.destroy(object, ...)
-		self:destructor(...)
-		setmetatable(self, nil)
-	end
-	function class:destructor()
+		if type(object.destructor) == "function" then object:destructor(...) end
+		setmetatable(object, nil)
 	end
 	setmetatable(class, {
 		__index = function(_, key)
@@ -19,7 +15,7 @@ local function createClass(super)
 		end,
 		__call = function(_, ...)
 			local object = setmetatable({}, class)
-			object:constructor(...)
+			if type(object.constructor) == "function" then object:constructor(...) end
 			return object
 		end,
 	})
@@ -310,8 +306,59 @@ local function hsl(h, s, l, alpha)
 	return a * 0x1000000 + r * 0x10000 + g * 0x100 + b
 end
 
-local function createAttributes()
-	return {
+local materialTypes = {
+	shader = true,
+	svg = true,
+	texture = true,
+}
+
+local function isValidMaterial(material)
+	if not isElement(material) then return false end
+	local type = getElementType(material)
+	if not materialTypes[type] then return false end
+	return true, type
+end
+
+local Node = createClass()
+Node.__node__ = true
+
+function isNode(node)
+	return type(node) == "table" and node.__node__ == true
+end
+
+function Node:constructor(attributes, ...)
+	self.parent = false
+	self.index = false
+	self.children = {}
+	self.dirty = true
+	self.states = { hovered = false, clicked = false }
+	self.resolved = {
+		borderBottomLeftRadius = { value = 0, unit = "auto" },
+		borderBottomRightRadius = { value = 0, unit = "auto" },
+		borderRadius = { value = 0, unit = "auto" },
+		borderTopLeftRadius = { value = 0, unit = "auto" },
+		borderTopRightRadius = { value = 0, unit = "auto" },
+		bottom = { value = 0, unit = "auto" },
+		flexGrow = { value = 0, unit = "pixel" },
+		flexShrink = { value = 0, unit = "pixel" },
+		gap = { value = 0, unit = "auto" },
+		height = { value = 0, unit = "auto" },
+		left = { value = 0, unit = "auto" },
+		padding = { value = 0, unit = "auto" },
+		paddingBottom = { value = 0, unit = "auto" },
+		paddingLeft = { value = 0, unit = "auto" },
+		paddingRight = { value = 0, unit = "auto" },
+		paddingTop = { value = 0, unit = "auto" },
+		right = { value = 0, unit = "auto" },
+		strokeBottomWeight = { value = 0, unit = "auto" },
+		strokeLeftWeight = { value = 0, unit = "auto" },
+		strokeRightWeight = { value = 0, unit = "auto" },
+		strokeTopWeight = { value = 0, unit = "auto" },
+		strokeWeight = { value = 0, unit = "auto" },
+		top = { value = 0, unit = "auto" },
+		width = { value = 0, unit = "auto" },
+	}
+	self.__attributes = {
 		alignItems = "stretch",
 		alignSelf = "auto",
 		backgroundColor = 0x00ffffff,
@@ -357,57 +404,16 @@ local function createAttributes()
 		visible = true,
 		width = "auto",
 	}
-end
-
-local Node = createClass()
-
-function Node:constructor(attributes, ...)
-	self.parent = false
-	self.index = false
-	self.children = {}
-	self.dirty = true
-	self.states = { hovered = false, clicked = false }
-	self.resolved = {
-		borderBottomLeftRadius = { value = 0, unit = "auto" },
-		borderBottomRightRadius = { value = 0, unit = "auto" },
-		borderRadius = { value = 0, unit = "auto" },
-		borderTopLeftRadius = { value = 0, unit = "auto" },
-		borderTopRightRadius = { value = 0, unit = "auto" },
-		bottom = { value = 0, unit = "auto" },
-		flexGrow = { value = 0, unit = "pixel" },
-		flexShrink = { value = 0, unit = "pixel" },
-		gap = { value = 0, unit = "auto" },
-		height = { value = 0, unit = "auto" },
-		left = { value = 0, unit = "auto" },
-		padding = { value = 0, unit = "auto" },
-		paddingBottom = { value = 0, unit = "auto" },
-		paddingLeft = { value = 0, unit = "auto" },
-		paddingRight = { value = 0, unit = "auto" },
-		paddingTop = { value = 0, unit = "auto" },
-		right = { value = 0, unit = "auto" },
-		strokeBottomWeight = { value = 0, unit = "auto" },
-		strokeLeftWeight = { value = 0, unit = "auto" },
-		strokeRightWeight = { value = 0, unit = "auto" },
-		strokeTopWeight = { value = 0, unit = "auto" },
-		strokeWeight = { value = 0, unit = "auto" },
-		top = { value = 0, unit = "auto" },
-		width = { value = 0, unit = "auto" },
-	}
-	self.__attributes = createAttributes()
 	self.attributes = createProxy(self.__attributes, function(key, value)
 		local resolvedAttribute = self.resolved[key]
-		if resolvedAttribute then
-			resolvedAttribute.value, resolvedAttribute.unit = resolveLength(value)
-		end
+		if resolvedAttribute then resolvedAttribute.value, resolvedAttribute.unit = resolveLength(value) end
 		if key == "material" then
 			local computed = self.computed
 			local materialWidth = 0
 			local materialHeight = 0
 			local attributes = self.__attributes
 			local material = attributes.material
-			if material then
-				materialWidth, materialHeight = dxGetMaterialSize(material)
-			end
+			if isValidMaterial(material) then materialWidth, materialHeight = dxGetMaterialSize(material) end
 			computed.materialWidth = materialWidth
 			computed.materialHeight = materialHeight
 		end
@@ -445,35 +451,30 @@ function Node:constructor(attributes, ...)
 		y = 0,
 	}
 	if attributes then
-		if attributes.onCursorEnter then
+		if type(attributes.onCursorEnter) == "function" then
 			self.onCursorEnter = attributes.onCursorEnter
-			attributes.onCursorEnter = nil
 		end
-		if attributes.onCursorLeave then
+		if type(attributes.onCursorLeave) == "function" then
 			self.onCursorLeave = attributes.onCursorLeave
-			attributes.onCursorLeave = nil
 		end
-		if attributes.onCursorOver then
+		if type(attributes.onCursorOver) == "function" then
 			self.onCursorOver = attributes.onCursorOver
-			attributes.onCursorOver = nil
 		end
-		if attributes.onCursorOut then
+		if type(attributes.onCursorOut) == "function" then
 			self.onCursorOut = attributes.onCursorOut
-			attributes.onCursorOut = nil
 		end
-		if attributes.onCursorDown then
+		if type(attributes.onCursorDown) == "function" then
 			self.onCursorDown = attributes.onCursorDown
-			attributes.onCursorDown = nil
 		end
-		if attributes.onCursorUp then
+		if type(attributes.onCursorUp) == "function" then
 			self.onCursorUp = attributes.onCursorUp
-			attributes.onCursorUp = nil
 		end
-		if attributes.onClick then
+		if type(attributes.onClick) == "function" then
 			self.onClick = attributes.onClick
-			attributes.onClick = nil
 		end
-		for key, value in pairs(attributes) do self.attributes[key] = value end
+		for key, value in pairs(attributes) do
+			if key == "debug" or self.__attributes[key] ~= nil then self.attributes[key] = value end
+		end
 	end
 	local childCount = select("#", ...)
 	for i = 1, childCount do self:appendChild(select(i, ...)) end
@@ -487,14 +488,17 @@ function Node:destructor()
 end
 
 function Node:setParent(parent)
+	if parent ~= false and not isNode(parent) then return false end
 	if parent then
 		parent:appendChild(self)
 	elseif self.parent then
 		self.parent:removeChild(self)
 	end
+	return true
 end
 
 function Node:appendChild(child)
+	if not isNode(child) then return false end
 	if child.parent == self then return false end
 	if child.parent then child.parent:removeChild(child) end
 	table.insert(self.children, child)
@@ -506,6 +510,7 @@ function Node:appendChild(child)
 end
 
 function Node:removeChild(child)
+	if not isNode(child) then return false end
 	if child.parent ~= self then return false end
 	table.remove(self.children, child.index)
 	self:reindexChildren(child.index)
@@ -529,6 +534,7 @@ function Node:markDirty()
 end
 
 Text = createClass(Node)
+Text.__text__ = true
 
 function Text:measure()
 	local computed = self.computed
@@ -554,6 +560,7 @@ function Text:draw(x, y, width, height, color)
 end
 
 Image = createClass(Node)
+Image.__image__ = true
 
 function Image:measure()
 	local computed = self.computed
@@ -563,7 +570,11 @@ end
 function Image:draw(x, y, width, height, color)
 	local attributes = self.attributes
 	local material = attributes.material
-	if material then dxDrawImage(x, y, width, height, material, 0, 0, 0, color) end
+	if isValidMaterial(material) then
+		local render = self.render
+		local shader = render.imageShader
+		dxDrawImage(x, y, width, height, isValidMaterial(shader) and shader or material, 0, 0, 0, color)
+	end
 end
 
 local splitChildrenIntoLines
@@ -881,27 +892,27 @@ end
 local RectangleShaderString = [[
 	float4 BORDER_RADIUS;
 	float4 STROKE_WEIGHT;
+	texture TEXTURE;
+	SamplerState TEXTURE_SAMPLER {Texture = TEXTURE;};
+	bool USING_TEXTURE;
 
-	float fill(float sdf, float aa, float blur)
-	{
+	float fill(float sdf, float aa, float blur) {
 		return smoothstep(0.5 * aa, -0.5 * aa - blur, sdf);
 	}
 
-	float stroke(float sdf, float weight, float aa, float blur)
-	{
+	float stroke(float sdf, float weight, float aa, float blur) {
 		return smoothstep((weight + aa) * 0.5, (weight - aa) * 0.5 - blur, abs(sdf));
 	}
 
-	float sdRectangle(float2 position, float2 size, float4 borderRadius)
-	{
+	float sdRectangle(float2 position, float2 size, float4 borderRadius) {
 		borderRadius.xy = (position.x > 0.0) ? borderRadius.yw : borderRadius.xz;
 		borderRadius.x = (position.y > 0.0) ? borderRadius.x : borderRadius.y;
 		float2 q = abs(position) - size + borderRadius.x;
 		return length(max(q, 0.0)) + min(max(q.x, q.y), 0.0) - borderRadius.x;
 	}
 
-	float4 pixel(float2 texcoord: TEXCOORD0, float4 color: COLOR0): COLOR0
-	{
+	float4 pixel(float2 texcoord: TEXCOORD0, float4 color: COLOR0): COLOR0 {
+		float2 originalTexcoord = texcoord;
 		texcoord -= 0.5;
 		float2 dx = ddx(texcoord);
 		float2 dy = ddy(texcoord);
@@ -920,13 +931,12 @@ local RectangleShaderString = [[
 		float aa = length(fwidth(position));
 		float alpha = any(strokeWeight) ? stroke(sdf, strokeWeight.x, aa, 0.0) : fill(sdf, aa, 0.0);
 		color.a *= alpha;
+		if (USING_TEXTURE) color *= tex2D(TEXTURE_SAMPLER, originalTexcoord);
 		return color;
 	}
 
-	technique rectangle
-	{
-		pass p0
-		{
+	technique rectangle {
+		pass p0 {
 			SeparateAlphaBlendEnable = true;
 			SrcBlendAlpha = One;
 			DestBlendAlpha = InvSrcAlpha;
@@ -934,6 +944,33 @@ local RectangleShaderString = [[
 		}
 	}
 ]]
+
+local _dxDrawImage = dxDrawImage
+local _dxSetBlendMode = dxSetBlendMode
+local _dxGetBlendMode = dxGetBlendMode
+
+local currentBlendMode = "blend"
+
+local function dxSetBlendMode(blendMode)
+	if blendMode == currentBlendMode then return false end
+	local success = _dxSetBlendMode(blendMode)
+	if success then currentBlendMode = blendMode end
+	return success
+end
+
+local function dxGetBlendMode()
+	return blendMode
+end
+
+local function dxDrawImage(x, y, width, height, material, ...)
+	local valid, type = isValidMaterial(material)
+	if not valid then return false end
+	local previousBlendMode = dxGetBlendMode()
+	if type == "shader" then dxSetBlendMode("blend") end
+	_dxDrawImage(x, y, width, height, material, ...)
+	dxSetBlendMode(previousBlendMode)
+	return true
+end
 
 local function renderer(node, pX, pY, pColor)
 	local attributes = node.__attributes
@@ -1021,6 +1058,13 @@ local function renderer(node, pX, pY, pColor)
 	local hasBackground = getColorAlpha(backgroundColor) > 0
 	local renderStrokeShader = render.strokeShader
 	local hasStroke = getColorAlpha(strokeColor) > 0 and (renderStrokeLeftWeight > 0 or renderStrokeTopWeight > 0 or renderStrokeRightWeight > 0 or renderStrokeBottomWeight > 0)
+	local renderImageShader = false
+	local hasMaterial = false
+	if node.__image__ then
+		renderImageShader = render.imageShader
+		local material = attributes.material
+		hasMaterial = isValidMaterial(material) and material
+	end
 	if usingRectangleShader then
 		if hasBackground then
 			if renderBackgroundShader == nil then
@@ -1034,6 +1078,16 @@ local function renderer(node, pX, pY, pColor)
 				render.strokeShader = renderStrokeShader
 			end
 		end
+		if hasMaterial then
+			if renderImageShader == nil then
+				renderImageShader = dxCreateShader(RectangleShaderString)
+				render.imageShader = renderImageShader
+				if renderImageShader then
+					dxSetShaderValue(renderImageShader, "TEXTURE", hasMaterial)
+					dxSetShaderValue(renderImageShader, "USING_TEXTURE", true)
+				end
+			end
+		end
 		local previousBorderTopLeftRadius = render.borderTopLeftRadius
 		local previousBorderTopRightRadius = render.borderTopRightRadius
 		local previousBorderBottomLeftRadius = render.borderBottomLeftRadius
@@ -1043,8 +1097,9 @@ local function renderer(node, pX, pY, pColor)
 			render.borderTopRightRadius = renderBorderTopRightRadius
 			render.borderBottomLeftRadius = renderBorderBottomLeftRadius
 			render.borderBottomRightRadius = renderBorderBottomRightRadius
-			if renderBackgroundShader and isElement(renderBackgroundShader) then dxSetShaderValue(renderBackgroundShader, "BORDER_RADIUS", renderBorderTopLeftRadius, renderBorderTopRightRadius, renderBorderBottomLeftRadius, renderBorderBottomRightRadius) end
-			if renderStrokeShader and isElement(renderStrokeShader) then dxSetShaderValue(renderStrokeShader, "BORDER_RADIUS", renderBorderTopLeftRadius, renderBorderTopRightRadius, renderBorderBottomLeftRadius, renderBorderBottomRightRadius) end
+			if isValidMaterial(renderBackgroundShader) then dxSetShaderValue(renderBackgroundShader, "BORDER_RADIUS", renderBorderTopLeftRadius, renderBorderTopRightRadius, renderBorderBottomLeftRadius, renderBorderBottomRightRadius) end
+			if isValidMaterial(renderStrokeShader) then dxSetShaderValue(renderStrokeShader, "BORDER_RADIUS", renderBorderTopLeftRadius, renderBorderTopRightRadius, renderBorderBottomLeftRadius, renderBorderBottomRightRadius) end
+			if isValidMaterial(renderImageShader) then dxSetShaderValue(renderImageShader, "BORDER_RADIUS", renderBorderTopLeftRadius, renderBorderTopRightRadius, renderBorderBottomLeftRadius, renderBorderBottomRightRadius) end
 		end
 		local previousStrokeLeftWeight = render.strokeLeftWeight
 		local previousStrokeTopWeight = render.strokeTopWeight
@@ -1055,29 +1110,34 @@ local function renderer(node, pX, pY, pColor)
 			render.strokeTopWeight = renderStrokeTopWeight
 			render.strokeRightWeight = renderStrokeRightWeight
 			render.strokeBottomWeight = renderStrokeBottomWeight
-			if renderStrokeShader and isElement(renderStrokeShader) then dxSetShaderValue(renderStrokeShader, "STROKE_WEIGHT", renderStrokeLeftWeight, renderStrokeTopWeight, renderStrokeRightWeight, renderStrokeBottomWeight) end
+			if isValidMaterial(renderStrokeShader) then dxSetShaderValue(renderStrokeShader, "STROKE_WEIGHT", renderStrokeLeftWeight, renderStrokeTopWeight, renderStrokeRightWeight, renderStrokeBottomWeight) end
 		end
 	else
 		if renderBackgroundShader ~= nil then
-			if renderBackgroundShader and isElement(renderBackgroundShader) then destroyElement(renderBackgroundShader) end
+			if isValidMaterial(renderBackgroundShader) then destroyElement(renderBackgroundShader) end
 			renderBackgroundShader = nil
 			render.backgroundShader = renderBackgroundShader
 		end
 		if renderStrokeShader ~= nil then
-			if renderStrokeShader and isElement(renderStrokeShader) then destroyElement(renderStrokeShader) end
+			if isValidMaterial(renderStrokeShader) then destroyElement(renderStrokeShader) end
 			renderStrokeShader = nil
 			render.strokeShader = renderStrokeShader
 		end
+		if renderImageShader ~= nil then
+			if isValidMaterial(renderImageShader) then destroyElement(renderImageShader) end
+			renderImageShader = nil
+			render.imageShader = renderImageShader
+		end
 	end
 	if hasBackground then
-		if usingRectangleShader and renderBackgroundShader and isElement(renderBackgroundShader) then
+		if usingRectangleShader and isValidMaterial(renderBackgroundShader) then
 			dxDrawImage(x, y, computedWidth, computedHeight, renderBackgroundShader, 0, 0, 0, backgroundColor)
 		else
 			dxDrawRectangle(x, y, computedWidth, computedHeight, backgroundColor)
 		end
 	end
 	if hasStroke then
-		if usingRectangleShader and renderStrokeShader and isElement(renderStrokeShader) then
+		if usingRectangleShader and isValidMaterial(renderStrokeShader) then
 			dxDrawImage(x, y, computedWidth, computedHeight, renderStrokeShader, 0, 0, 0, strokeColor)
 		else
 			dxDrawRectangle(x, y, renderStrokeLeftWeight, computedHeight, strokeColor)
