@@ -3,55 +3,39 @@ local screenScale = screenHeight / 1080
 
 local function createClass(super)
 	local class
-
 	class = {}
 	class.__index = class
-
+	function class:constructor()
+	end
+	function class.destroy(object, ...)
+		self:destructor(...)
+		setmetatable(self, nil)
+	end
+	function class:destructor()
+	end
 	setmetatable(class, {
-		__call = function(_, ...)
-			local instance = setmetatable({
-				destroy = function(self, ...)
-					if self.destructor then
-						self:destructor(...)
-					end
-
-					setmetatable(self, nil)
-				end,
-			}, class)
-
-			if instance.constructor then
-				instance:constructor(...)
-			end
-
-			return instance
-		end,
-
 		__index = function(_, key)
 			return super and super[key]
 		end,
+		__call = function(_, ...)
+			local object = setmetatable({}, class)
+			object:constructor(...)
+			return object
+		end,
 	})
-
 	return class
 end
 
 local function createProxy(source, onchanged)
 	return setmetatable({}, {
-		__newindex = function(_, key, value)
-			local previous = source[key]
-
-			if value == previous then
-				return
-			end
-
-			source[key] = value
-
-			if onchanged then
-				onchanged(key, value)
-			end
-		end,
-
 		__index = function(_, key)
 			return source[key]
+		end,
+		__newindex = function(_, key, value)
+			local previous = source[key]
+			if value == previous then return end
+			source[key] = value
+			if onchanged then onchanged(key, value) end
 		end,
 	})
 end
@@ -235,9 +219,7 @@ end
 
 local function hex(hex)
 	hex = hex:gsub("#", "")
-
 	local r, g, b, a
-
 	if #hex == 3 then
 		r = tonumber(hex:sub(1, 1):rep(2), 16)
 		g = tonumber(hex:sub(2, 2):rep(2), 16)
@@ -259,7 +241,6 @@ local function hex(hex)
 		b = tonumber(hex:sub(5, 6), 16)
 		a = tonumber(hex:sub(7, 8), 16)
 	end
-
 	return a * 0x1000000 + r * 0x10000 + g * 0x100 + b
 end
 
@@ -267,16 +248,13 @@ local function hue(color)
 	local r = math.floor(color / 0x10000) % 0x100
 	local g = math.floor(color / 0x100) % 0x100
 	local b = color % 0x100
-
 	r = r / 255
 	g = g / 255
 	b = b / 255
-
 	local maxc = math.max(r, g, b)
 	local minc = math.min(r, g, b)
 	local delta = maxc - minc
 	local hue
-
 	if delta == 0 then
 		hue = 0
 	elseif maxc == r then
@@ -286,27 +264,21 @@ local function hue(color)
 	else
 		hue = ((r - g) / delta) + 4
 	end
-
 	hue = hue * 60
-
 	if hue < 0 then
 		hue = hue + 360
 	end
-
 	return hue
 end
 
 local function hue2rgb(p, q, t)
 	local tmod = t
-
 	if tmod < 0 then
 		tmod = tmod + 1
 	end
-
 	if tmod > 1 then
 		tmod = tmod - 1
 	end
-
 	if tmod < 1 / 6 then
 		return p + (q - p) * 6 * tmod
 	elseif tmod < 1 / 2 then
@@ -314,33 +286,27 @@ local function hue2rgb(p, q, t)
 	elseif tmod < 2 / 3 then
 		return p + (q - p) * (2 / 3 - tmod) * 6
 	end
-
 	return p
 end
 
 local function hsl(h, s, l, alpha)
 	local red, green, blue
-
 	if s == 0 then
 		red, green, blue = l, l, l
 	else
 		local q = (l < 0.5) and (l * (1 + s)) or (l + s - l * s)
 		local p = 2 * l - q
-
 		local huer = h + 1 / 3
 		local hueg = h
 		local hueb = h - 1 / 3
-
 		red = hue2rgb(p, q, huer)
 		green = hue2rgb(p, q, hueg)
 		blue = hue2rgb(p, q, hueb)
 	end
-
 	local r = math.floor(red * 255 + 0.5)
 	local g = math.floor(green * 255 + 0.5)
 	local b = math.floor(blue * 255 + 0.5)
 	local a = math.floor((alpha or 1) * 255 + 0.5)
-
 	return a * 0x1000000 + r * 0x10000 + g * 0x100 + b
 end
 
@@ -397,15 +363,10 @@ local Node = createClass()
 
 function Node:constructor(attributes, ...)
 	self.parent = false
-
 	self.index = false
-
 	self.children = {}
-
 	self.dirty = true
-
 	self.states = { hovered = false, clicked = false }
-
 	self.resolved = {
 		borderBottomLeftRadius = { value = 0, unit = "auto" },
 		borderBottomRightRadius = { value = 0, unit = "auto" },
@@ -432,34 +393,26 @@ function Node:constructor(attributes, ...)
 		top = { value = 0, unit = "auto" },
 		width = { value = 0, unit = "auto" },
 	}
-
 	self.__attributes = createAttributes()
-
 	self.attributes = createProxy(self.__attributes, function(key, value)
 		local resolvedAttribute = self.resolved[key]
-
 		if resolvedAttribute then
 			resolvedAttribute.value, resolvedAttribute.unit = resolveLength(value)
 		end
-
 		if key == "material" then
-			local attributes = self.__attributes
 			local computed = self.computed
-
 			local materialWidth = 0
 			local materialHeight = 0
-
-			if attributes.material then
-				materialWidth, materialHeight = dxGetMaterialSize(attributes.material)
+			local attributes = self.__attributes
+			local material = attributes.material
+			if material then
+				materialWidth, materialHeight = dxGetMaterialSize(material)
 			end
-
 			computed.materialWidth = materialWidth
 			computed.materialHeight = materialHeight
 		end
-
 		self:markDirty()
 	end)
-
 	self.computed = {
 		bottom = 0,
 		flexBasis = 0,
@@ -475,63 +428,63 @@ function Node:constructor(attributes, ...)
 		x = 0,
 		y = 0,
 	}
-
 	self.render = {
+		backgroundShader = nil,
+		borderBottomLeftRadius = 0,
+		borderBottomRightRadius = 0,
+		borderTopLeftRadius = 0,
+		borderTopRightRadius = 0,
 		height = 0,
+		strokeBottomWeight = 0,
+		strokeLeftWeight = 0,
+		strokeRightWeight = 0,
+		strokeShader = nil,
+		strokeTopWeight = 0,
 		width = 0,
 		x = 0,
 		y = 0,
 	}
-
 	if attributes then
 		if attributes.onCursorEnter then
 			self.onCursorEnter = attributes.onCursorEnter
 			attributes.onCursorEnter = nil
 		end
-
 		if attributes.onCursorLeave then
 			self.onCursorLeave = attributes.onCursorLeave
 			attributes.onCursorLeave = nil
 		end
-
 		if attributes.onCursorOver then
 			self.onCursorOver = attributes.onCursorOver
 			attributes.onCursorOver = nil
 		end
-
 		if attributes.onCursorOut then
 			self.onCursorOut = attributes.onCursorOut
 			attributes.onCursorOut = nil
 		end
-
 		if attributes.onCursorDown then
 			self.onCursorDown = attributes.onCursorDown
 			attributes.onCursorDown = nil
 		end
-
 		if attributes.onCursorUp then
 			self.onCursorUp = attributes.onCursorUp
 			attributes.onCursorUp = nil
 		end
-
 		if attributes.onClick then
 			self.onClick = attributes.onClick
 			attributes.onClick = nil
 		end
-
-		for key, value in pairs(attributes) do
-			self.attributes[key] = value
-		end
+		for key, value in pairs(attributes) do self.attributes[key] = value end
 	end
-
-	local childcount = select("#", ...)
-
-	for i = 1, childcount do
-		self:appendChild(select(i, ...))
-	end
+	local childCount = select("#", ...)
+	for i = 1, childCount do self:appendChild(select(i, ...)) end
 end
 
-function Node:destructor() end
+function Node:destructor()
+	local children = self.children
+	local childCount = #children
+	for i = childCount, 1, -1 do children[i]:destroy() end
+	if self.parent then self.parent:removeChild(self) end
+end
 
 function Node:setParent(parent)
 	if parent then
@@ -542,57 +495,37 @@ function Node:setParent(parent)
 end
 
 function Node:appendChild(child)
-	if child.parent == self then
-		return false
-	end
-
-	if child.parent then
-		child.parent:removeChild(child)
-	end
-
+	if child.parent == self then return false end
+	if child.parent then child.parent:removeChild(child) end
 	table.insert(self.children, child)
-
 	child.parent = self
 	child.index = #self.children
 	child.dirty = true
-
 	self:markDirty()
-
 	return true
 end
 
 function Node:removeChild(child)
-	if child.parent ~= self then
-		return false
-	end
-
+	if child.parent ~= self then return false end
 	table.remove(self.children, child.index)
 	self:reindexChildren(child.index)
-
 	child.parent = false
 	child.index = false
-
 	self:markDirty()
-
 	return true
 end
 
 function Node:reindexChildren(startAt)
+	if startAt ~= nil and type(startAt) ~= "number" then startAt = 1 end
 	local children = self.children
-
-	for i = startAt or 1, #children do
-		children[i].index = i
-	end
+	local childCount = #children
+	for i = startAt, childCount do children[i].index = i end
 end
 
 function Node:markDirty()
-	if not self.dirty then
-		self.dirty = true
-	end
-
-	if self.parent then
-		self.parent:markDirty()
-	end
+	if not self.dirty then self.dirty = true end
+	local parent = self.parent
+	if parent and not parent.dirty then parent:markDirty() end
 end
 
 Text = createClass(Node)
@@ -600,228 +533,99 @@ Text = createClass(Node)
 function Text:measure()
 	local computed = self.computed
 	local computedWidth = computed.width
-
 	local attributes = self.__attributes
-
-	local font = attributes.font
-
 	local text = attributes.text
 	local textSize = attributes.textSize
 	local textWordWrap = attributes.textWordWrap
 	local textColorCoded = attributes.textColorCoded
-
+	local font = attributes.font
 	local fontHeight = dxGetFontHeight(textSize, font)
-
 	local textWidth, textHeight = dxGetTextSize(text, computedWidth, textSize, font, textWordWrap, textColorCoded)
 	textHeight = math.max(textHeight, fontHeight)
-
 	computed.textWidth = textWidth
 	computed.textHeight = textHeight
-
 	return textWidth, textHeight
 end
 
 function Text:draw(x, y, width, height, color)
 	local attributes = self.attributes
-
-	if attributes.text ~= "" then
-		dxDrawText(
-			attributes.text,
-			x,
-			y,
-			x + width,
-			y + height,
-			color,
-			attributes.textSize,
-			attributes.font,
-			attributes.textAlignX,
-			attributes.textAlignY,
-			attributes.textClip,
-			attributes.textWordWrap,
-			false,
-			attributes.textColorCoded
-		)
-	end
+	local text = attributes.text
+	if text ~= "" then dxDrawText(text, x, y, x + width, y + height, color, attributes.textSize, attributes.font, attributes.textAlignX, attributes.textAlignY, attributes.textClip, attributes.textWordWrap, false, attributes.textColorCoded) end
 end
 
 Image = createClass(Node)
 
 function Image:measure()
 	local computed = self.computed
-
 	return computed.materialWidth, computed.materialHeight
 end
 
 function Image:draw(x, y, width, height, color)
 	local attributes = self.attributes
-
-	if attributes.material then
-		dxDrawImage(x, y, width, height, attributes.material, 0, 0, 0, color)
-	end
+	local material = attributes.material
+	if material then dxDrawImage(x, y, width, height, material, 0, 0, 0, color) end
 end
 
 local splitChildrenIntoLines
-
 local calculateLayout
 
-function splitChildrenIntoLines(
-	node,
-	isMainAxisRow,
-	mainAxisDimension,
-	mainAxisPosition,
-	crossAxisDimension,
-	crossAxisPosition,
-	containerMainSize,
-	containerCrossSize,
-	containerMainInnerSize,
-	containerCrossInnerSize,
-	paddingMainStart,
-	paddingCrossStart,
-	gapMain,
-	gapCross,
-	flexCanWrap,
-	stretchChildren,
-	children,
-	childcount,
-	doingSecondPass,
-	doingThirdPass
-)
-	local flexLines = {
-		{
-			[mainAxisDimension] = 0,
-			[mainAxisPosition] = paddingMainStart,
-			[crossAxisDimension] = 0,
-			[crossAxisPosition] = paddingCrossStart,
-			remainingFreeSpace = 0,
-			totalFlexGrowFactor = 0,
-			totalFlexShrinkScaledFactor = 0,
-		},
-	}
-	local currentLine = flexLines[1]
-
+function splitChildrenIntoLines(node, isMainAxisRow, mainAxisDimension, mainAxisPosition, crossAxisDimension, crossAxisPosition, containerMainSize, containerCrossSize, containerMainInnerSize, containerCrossInnerSize, paddingMainStart, paddingCrossStart, gapMain, gapCross, flexCanWrap, stretchChildren, children, childCount, doingSecondPass, doingThirdPass)
+	local lines = {{[mainAxisDimension] = 0, [mainAxisPosition] = paddingMainStart, [crossAxisDimension] = 0, [crossAxisPosition] = paddingCrossStart, remainingFreeSpace = 0, totalFlexGrowFactor = 0, totalFlexShrinkScaledFactor = 0,},}
+	local currentLine = lines[1]
 	local linesMainMaximumLineSize = 0
 	local linesCrossTotalLinesSize = 0
-
 	local secondPassChildren
 	local thirdPassChildren
-
 	local absoluteChildren
-
-	for i = 1, childcount do
+	for i = 1, childCount do
 		local child = children[i]
-
 		local childAttributes = child.__attributes
 		local childPosition = childAttributes.position
-
 		if childAttributes.visible then
 			local childResolved = child.resolved
-
 			if not doingSecondPass then
 				if childPosition == "absolute" then
-					local availableWidth = isMainAxisRow and containerMainSize ~= nil and containerMainSize
-						or not isMainAxisRow and containerCrossSize ~= nil and containerCrossSize
-						or nil
-					local availableHeight = isMainAxisRow and containerCrossSize ~= nil and containerCrossSize
-						or not isMainAxisRow and containerMainSize ~= nil and containerMainSize
-						or nil
-
+					local availableWidth = isMainAxisRow and containerMainSize ~= nil and containerMainSize or not isMainAxisRow and containerCrossSize ~= nil and containerCrossSize or nil
+					local availableHeight = isMainAxisRow and containerCrossSize ~= nil and containerCrossSize or not isMainAxisRow and containerMainSize ~= nil and containerMainSize or nil
 					calculateLayout(child, availableWidth, availableHeight, nil, nil, isMainAxisRow, stretchChildren)
 				elseif childPosition == "relative" then
-					local availableWidth = isMainAxisRow and containerMainSize ~= nil and containerMainInnerSize
-						or not isMainAxisRow and containerCrossSize ~= nil and containerCrossInnerSize
-						or nil
-					local availableHeight = isMainAxisRow and containerCrossSize ~= nil and containerCrossInnerSize
-						or not isMainAxisRow and containerMainSize ~= nil and containerMainInnerSize
-						or nil
-
+					local availableWidth = isMainAxisRow and containerMainSize ~= nil and containerMainInnerSize or not isMainAxisRow and containerCrossSize ~= nil and containerCrossInnerSize or nil
+					local availableHeight = isMainAxisRow and containerCrossSize ~= nil and containerCrossInnerSize or not isMainAxisRow and containerMainSize ~= nil and containerMainInnerSize or nil
 					calculateLayout(child, availableWidth, availableHeight, nil, nil, isMainAxisRow, stretchChildren)
 				end
-
 				local childResolvedMainSize = childResolved[mainAxisDimension]
 				local childResolvedCrossSize = childResolved[crossAxisDimension]
-
 				local childAlignSelf = childAttributes.alignSelf
-
-				if
-					childResolvedMainSize.unit == "percentage" and containerMainSize == nil
-					or (
-						childResolvedCrossSize.unit == "auto"
-							and stretchChildren
-							and (childAlignSelf == "auto" or childAlignSelf == "stretch")
-							and childPosition == "relative"
-						or childResolvedCrossSize.unit == "percentage" and containerCrossSize == nil
-					)
-				then
-					if not secondPassChildren then
-						secondPassChildren = {}
-					end
+				if childResolvedMainSize.unit == "percentage" and containerMainSize == nil or (childResolvedCrossSize.unit == "auto" and stretchChildren and (childAlignSelf == "auto" or childAlignSelf == "stretch") and childPosition == "relative" or childResolvedCrossSize.unit == "percentage" and containerCrossSize == nil) then
+					if not secondPassChildren then secondPassChildren = {} end
 					table.insert(secondPassChildren, child)
 				end
-
 				if childPosition == "absolute" then
-					if not absoluteChildren then
-						absoluteChildren = {}
-					end
-
+					if not absoluteChildren then absoluteChildren = {} end
 					table.insert(absoluteChildren, child)
 				end
 			end
-
 			if childPosition == "relative" then
 				local childComputed = child.computed
-				local childComputedMainSize = not doingThirdPass and childComputed.flexBasis
-					or childComputed[mainAxisDimension]
+				local childComputedMainSize = not doingThirdPass and childComputed.flexBasis or childComputed[mainAxisDimension]
 				local childComputedCrossSize = childComputed[crossAxisDimension]
-
-				if
-					flexCanWrap
-					and #currentLine > 1
-					and currentLine[mainAxisDimension] + gapMain + childComputedMainSize > containerMainInnerSize
-				then
+				if flexCanWrap and #currentLine > 1 and currentLine[mainAxisDimension] + gapMain + childComputedMainSize > containerMainInnerSize then
 					local previousLine = currentLine
-
-					currentLine = {
-						[mainAxisDimension] = 0,
-						[mainAxisPosition] = paddingMainStart,
-						[crossAxisDimension] = 0,
-						[crossAxisPosition] = gapCross
-							+ previousLine[crossAxisPosition]
-							+ previousLine[crossAxisDimension],
-						remainingFreeSpace = 0,
-						totalFlexGrowFactor = 0,
-						totalFlexShrinkScaledFactor = 0,
-					}
-
-					table.insert(flexLines, currentLine)
+					currentLine = {[mainAxisDimension] = 0, [mainAxisPosition] = paddingMainStart, [crossAxisDimension] = 0, [crossAxisPosition] = gapCross + previousLine[crossAxisPosition] + previousLine[crossAxisDimension], remainingFreeSpace = 0, totalFlexGrowFactor = 0, totalFlexShrinkScaledFactor = 0,}
+					table.insert(lines, currentLine)
 				end
-
 				table.insert(currentLine, child)
-
-				currentLine[mainAxisDimension] = currentLine[mainAxisDimension]
-					+ (#currentLine > 0 and i < childcount and gapMain or 0)
-					+ childComputedMainSize
+				currentLine[mainAxisDimension] = currentLine[mainAxisDimension] + (#currentLine > 0 and i < childCount and gapMain or 0) + childComputedMainSize
 				currentLine[crossAxisDimension] = math.max(currentLine[crossAxisDimension], childComputedCrossSize)
-
-				if containerMainSize ~= nil then
-					currentLine.remainingFreeSpace = containerMainInnerSize - currentLine[mainAxisDimension]
-				end
-
-				linesMainMaximumLineSize =
-					math.max(linesMainMaximumLineSize, currentLine[mainAxisPosition] + currentLine[mainAxisDimension])
-				linesCrossTotalLinesSize =
-					math.max(linesCrossTotalLinesSize, currentLine[crossAxisPosition] + currentLine[crossAxisDimension])
-
+				if containerMainSize ~= nil then currentLine.remainingFreeSpace = containerMainInnerSize - currentLine[mainAxisDimension] end
+				linesMainMaximumLineSize = math.max(linesMainMaximumLineSize, currentLine[mainAxisPosition] + currentLine[mainAxisDimension])
+				linesCrossTotalLinesSize = math.max(linesCrossTotalLinesSize, currentLine[crossAxisPosition] + currentLine[crossAxisDimension])
 				local childFlexGrow = childResolved.flexGrow.value
 				local childFlexShrink = childResolved.flexShrink.value
-
 				if childFlexGrow > 0 or childFlexShrink > 0 then
 					currentLine.totalFlexGrowFactor = currentLine.totalFlexGrowFactor + childFlexGrow
-					currentLine.totalFlexShrinkScaledFactor = currentLine.totalFlexShrinkScaledFactor
-						+ childFlexShrink * childComputedMainSize
-
-					if not thirdPassChildren then
-						thirdPassChildren = {}
-					end
+					currentLine.totalFlexShrinkScaledFactor = currentLine.totalFlexShrinkScaledFactor + childFlexShrink * childComputedMainSize
+					if not thirdPassChildren then thirdPassChildren = {} end
 					table.insert(thirdPassChildren, child)
 					thirdPassChildren[child] = currentLine
 				end
@@ -829,77 +633,42 @@ function splitChildrenIntoLines(
 		end
 	end
 
-	return flexLines,
-		linesMainMaximumLineSize - paddingMainStart,
-		linesCrossTotalLinesSize - paddingCrossStart,
-		secondPassChildren,
-		thirdPassChildren,
-		absoluteChildren
+	return lines, linesMainMaximumLineSize - paddingMainStart, linesCrossTotalLinesSize - paddingCrossStart, secondPassChildren, thirdPassChildren, absoluteChildren
 end
 
-function calculateLayout(
-	node,
-	availableWidth,
-	availableHeight,
-	forcedWidth,
-	forcedHeight,
-	pIsMainAxisRow,
-	pStretchChildren
-)
-	if not node.dirty then
-		return false
-	end
-
+function calculateLayout(node, availableWidth, availableHeight, forcedWidth, forcedHeight, pIsMainAxisRow, pStretchChildren)
+	if not node.dirty then return false end
 	node.dirty = false
-
 	local resolved = node.resolved
 	local resolvedWidth = resolved.width
 	local resolvedHeight = resolved.height
-
 	local computed = node.computed
 	local computedWidth
 	local computedHeight
-
 	local attributes = node.__attributes
 	local alignSelf = attributes.alignSelf
-
 	if forcedWidth then
 		computedWidth = forcedWidth
 	elseif resolvedWidth.unit == "pixel" then
 		computedWidth = resolvedWidth.value
 	elseif resolvedWidth.unit == "percentage" and availableWidth then
 		computedWidth = resolvedWidth.value * availableWidth
-	elseif
-		resolvedWidth.unit == "auto"
-		and not pIsMainAxisRow
-		and pStretchChildren
-		and (alignSelf == "auto" or alignSelf == "stretch")
-		and availableWidth
-	then
+	elseif resolvedWidth.unit == "auto" and not pIsMainAxisRow and pStretchChildren and (alignSelf == "auto" or alignSelf == "stretch") and availableWidth then
 		computedWidth = availableWidth
 	end
-
 	if forcedHeight then
 		computedHeight = forcedHeight
 	elseif resolvedHeight.unit == "pixel" then
 		computedHeight = resolvedHeight.value
 	elseif resolvedHeight.unit == "percentage" and availableHeight then
 		computedHeight = resolvedHeight.value * availableHeight
-	elseif
-		resolvedHeight.unit == "auto"
-		and pIsMainAxisRow
-		and pStretchChildren
-		and (alignSelf == "auto" or alignSelf == "stretch")
-		and availableHeight
-	then
+	elseif resolvedHeight.unit == "auto" and pIsMainAxisRow and pStretchChildren and (alignSelf == "auto" or alignSelf == "stretch") and availableHeight then
 		computedHeight = availableHeight
 	end
-
 	local resolvedLeft = resolved.left
 	local resolvedTop = resolved.top
 	local resolvedRight = resolved.right
 	local resolvedBottom = resolved.bottom
-
 	if resolvedLeft.unit == "pixel" then
 		computed.left = resolvedLeft.value
 	elseif resolvedLeft.unit == "percentage" and availableWidth then
@@ -907,7 +676,6 @@ function calculateLayout(
 	else
 		computed.left = 0
 	end
-
 	if resolvedTop.unit == "pixel" then
 		computed.top = resolvedTop.value
 	elseif resolvedTop.unit == "percentage" and availableHeight then
@@ -915,7 +683,6 @@ function calculateLayout(
 	else
 		computed.top = 0
 	end
-
 	if resolvedRight.unit == "pixel" then
 		computed.right = resolvedRight.value
 	elseif resolvedRight.unit == "percentage" and availableWidth then
@@ -923,7 +690,6 @@ function calculateLayout(
 	else
 		computed.right = 0
 	end
-
 	if resolvedBottom.unit == "pixel" then
 		computed.bottom = resolvedBottom.value
 	elseif resolvedBottom.unit == "percentage" and availableHeight then
@@ -931,27 +697,21 @@ function calculateLayout(
 	else
 		computed.bottom = 0
 	end
-
 	local flexDirection = attributes.flexDirection
 	local isMainAxisRow = flexDirection == "row" or flexDirection == "row-reverse"
-
 	local mainAxisDimension = isMainAxisRow and "width" or "height"
 	local mainAxisPosition = isMainAxisRow and "x" or "y"
-
 	local crossAxisDimension = isMainAxisRow and "height" or "width"
 	local crossAxisPosition = isMainAxisRow and "y" or "x"
-
 	local resolvedPadding = resolved.padding
 	local resolvedPaddingLeft = resolved.paddingLeft
 	local resolvedPaddingTop = resolved.paddingTop
 	local resolvedPaddingRight = resolved.paddingRight
 	local resolvedPaddingBottom = resolved.paddingBottom
-
 	local computedPaddingLeft = 0
 	local computedPaddingTop = 0
 	local computedPaddingRight = 0
 	local computedPaddingBottom = 0
-
 	if resolvedPadding.unit == "pixel" then
 		local computedPadding = resolvedPadding.value
 		computedPaddingLeft = computedPadding
@@ -959,405 +719,162 @@ function calculateLayout(
 		computedPaddingRight = computedPadding
 		computedPaddingBottom = computedPadding
 	end
-
-	if resolvedPaddingLeft.unit == "pixel" then
-		computedPaddingLeft = resolvedPaddingLeft.value
-	end
-
-	if resolvedPaddingTop.unit == "pixel" then
-		computedPaddingTop = resolvedPaddingTop.value
-	end
-
-	if resolvedPaddingRight.unit == "pixel" then
-		computedPaddingRight = resolvedPaddingRight.value
-	end
-
-	if resolvedPaddingBottom.unit == "pixel" then
-		computedPaddingBottom = resolvedPaddingBottom.value
-	end
-
+	if resolvedPaddingLeft.unit == "pixel" then computedPaddingLeft = resolvedPaddingLeft.value end
+	if resolvedPaddingTop.unit == "pixel" then computedPaddingTop = resolvedPaddingTop.value end
+	if resolvedPaddingRight.unit == "pixel" then computedPaddingRight = resolvedPaddingRight.value end
+	if resolvedPaddingBottom.unit == "pixel" then computedPaddingBottom = resolvedPaddingBottom.value end
 	local paddingMainStart = isMainAxisRow and computedPaddingLeft or computedPaddingTop
 	local paddingMainEnd = isMainAxisRow and computedPaddingRight or computedPaddingBottom
-
 	local paddingCrossStart = isMainAxisRow and computedPaddingTop or computedPaddingLeft
 	local paddingCrossEnd = isMainAxisRow and computedPaddingBottom or computedPaddingRight
-
 	local containerMainSize = isMainAxisRow and computedWidth or not isMainAxisRow and computedHeight or nil
 	local containerMainInnerSize = math.max((containerMainSize or 0) - paddingMainStart - paddingMainEnd, 0)
-
 	local containerCrossSize = isMainAxisRow and computedHeight or not isMainAxisRow and computedWidth or nil
 	local containerCrossInnerSize = math.max((containerCrossSize or 0) - paddingCrossStart - paddingCrossEnd, 0)
-
 	local flexWrap = attributes.flexWrap
 	local flexCanWrap = flexWrap ~= "nowrap" and containerMainSize ~= nil
-
 	local justifyContent = attributes.justifyContent
-
 	local alignItems = attributes.alignItems
 	local stretchChildren = alignItems == "stretch"
-
 	local resolvedGap = resolved.gap
 	local computedGap = resolvedGap.value
-
 	local gapMain = computedGap
 	local gapCross = computedGap
-
 	local children = node.children
-	local childcount = children and #children or 0
-
-	if childcount > 0 then
-		local flexLines, linesMainMaximumLineSize, linesCrossTotalLinesSize, secondPassChildren, thirdPassChildren, absoluteChildren =
-			splitChildrenIntoLines(
-				node,
-				isMainAxisRow,
-				mainAxisDimension,
-				mainAxisPosition,
-				crossAxisDimension,
-				crossAxisPosition,
-				containerMainSize,
-				containerCrossSize,
-				containerMainInnerSize,
-				containerCrossInnerSize,
-				paddingMainStart,
-				paddingCrossStart,
-				gapMain,
-				gapCross,
-				flexCanWrap,
-				stretchChildren,
-				children,
-				childcount,
-				false,
-				false
-			)
-
+	local childCount = children and #children or 0
+	if childCount > 0 then
+		local lines, linesMainMaximumLineSize, linesCrossTotalLinesSize, secondPassChildren, thirdPassChildren, absoluteChildren = splitChildrenIntoLines(node, isMainAxisRow, mainAxisDimension, mainAxisPosition, crossAxisDimension, crossAxisPosition, containerMainSize, containerCrossSize, containerMainInnerSize, containerCrossInnerSize, paddingMainStart, paddingCrossStart, gapMain, gapCross, flexCanWrap, stretchChildren, children, childCount, false, false)
 		local resolvedMainSize = isMainAxisRow and resolvedWidth or resolvedHeight
 		local resolvedCrossSize = isMainAxisRow and resolvedHeight or resolvedWidth
-
 		local forcedMainSize = isMainAxisRow and forcedWidth or forcedHeight
 		local forcedCrossSize = isMainAxisRow and forcedHeight or forcedWidth
-
-		if
-			forcedMainSize == nil
-			and containerMainSize == nil
-			and (resolvedMainSize.unit == "auto" or resolvedMainSize.unit == "fit-content")
-		then
-			computedWidth = isMainAxisRow and (linesMainMaximumLineSize + paddingMainStart + paddingMainEnd)
-				or computedWidth
-			computedHeight = not isMainAxisRow and (linesMainMaximumLineSize + paddingMainStart + paddingMainEnd)
-				or computedHeight
-
+		if forcedMainSize == nil and containerMainSize == nil and (resolvedMainSize.unit == "auto" or resolvedMainSize.unit == "fit-content") then
+			computedWidth = isMainAxisRow and (linesMainMaximumLineSize + paddingMainStart + paddingMainEnd) or computedWidth
+			computedHeight = not isMainAxisRow and (linesMainMaximumLineSize + paddingMainStart + paddingMainEnd) or computedHeight
 			containerMainSize = isMainAxisRow and computedWidth or computedHeight
 			containerMainInnerSize = linesMainMaximumLineSize
 		end
-
 		if forcedCrossSize == nil and resolvedCrossSize.unit == "auto" or resolvedCrossSize.unit == "fit-content" then
-			computedWidth = not isMainAxisRow and (linesCrossTotalLinesSize + paddingCrossStart + paddingCrossEnd)
-				or computedWidth
-			computedHeight = isMainAxisRow and (linesCrossTotalLinesSize + paddingCrossStart + paddingCrossEnd)
-				or computedHeight
-
+			computedWidth = not isMainAxisRow and (linesCrossTotalLinesSize + paddingCrossStart + paddingCrossEnd) or computedWidth
+			computedHeight = isMainAxisRow and (linesCrossTotalLinesSize + paddingCrossStart + paddingCrossEnd) or computedHeight
 			containerCrossSize = isMainAxisRow and computedHeight or computedWidth
 			containerCrossInnerSize = linesCrossTotalLinesSize
 		end
-
-		if
-			forcedWidth == nil
-			and not pIsMainAxisRow
-			and pStretchChildren
-			and resolvedWidth.unit == "auto"
-			and (alignSelf == "auto" or alignSelf == "stretch")
-			and availableWidth
-		then
+		if forcedWidth == nil and not pIsMainAxisRow and pStretchChildren and resolvedWidth.unit == "auto" and (alignSelf == "auto" or alignSelf == "stretch") and availableWidth then
 			computedWidth = math.max(computedWidth, availableWidth)
-		elseif
-			forcedHeight == nil
-			and pIsMainAxisRow
-			and pStretchChildren
-			and resolvedHeight.unit == "auto"
-			and (alignSelf == "auto" or alignSelf == "stretch")
-			and availableHeight
-		then
+		elseif forcedHeight == nil and pIsMainAxisRow and pStretchChildren and resolvedHeight.unit == "auto" and (alignSelf == "auto" or alignSelf == "stretch") and availableHeight then
 			computedHeight = math.max(computedHeight, availableHeight)
 		end
-
 		if secondPassChildren then
 			for i = 1, #secondPassChildren do
 				local child = secondPassChildren[i]
-
 				child.dirty = true
-
-				local availableWidth = isMainAxisRow and containerMainSize ~= nil and containerMainInnerSize
-					or not isMainAxisRow and containerCrossSize ~= nil and containerCrossInnerSize
-				local availableHeight = isMainAxisRow and containerCrossSize ~= nil and containerCrossInnerSize
-					or not isMainAxisRow and containerMainSize ~= nil and containerMainInnerSize
-
+				local availableWidth = isMainAxisRow and containerMainSize ~= nil and containerMainInnerSize or not isMainAxisRow and containerCrossSize ~= nil and containerCrossInnerSize
+				local availableHeight = isMainAxisRow and containerCrossSize ~= nil and containerCrossInnerSize or not isMainAxisRow and containerMainSize ~= nil and containerMainInnerSize
 				calculateLayout(child, availableWidth, availableHeight, nil, nil, isMainAxisRow, stretchChildren)
 			end
-
-			flexLines, _, linesCrossTotalLinesSize, _, thirdPassChildren = splitChildrenIntoLines(
-				node,
-				isMainAxisRow,
-				mainAxisDimension,
-				mainAxisPosition,
-				crossAxisDimension,
-				crossAxisPosition,
-				containerMainSize,
-				containerCrossSize,
-				containerMainInnerSize,
-				containerCrossInnerSize,
-				paddingMainStart,
-				paddingCrossStart,
-				gapMain,
-				gapCross,
-				flexCanWrap,
-				stretchChildren,
-				children,
-				childcount,
-				true,
-				false
-			)
-
-			if
-				forcedCrossSize == nil and resolvedCrossSize.unit == "auto"
-				or resolvedCrossSize.unit == "fit-content"
-			then
-				computedWidth = not isMainAxisRow and (linesCrossTotalLinesSize + paddingCrossStart + paddingCrossEnd)
-					or computedWidth
-				computedHeight = isMainAxisRow and (linesCrossTotalLinesSize + paddingCrossStart + paddingCrossEnd)
-					or computedHeight
-
+			lines, _, linesCrossTotalLinesSize, _, thirdPassChildren = splitChildrenIntoLines(node, isMainAxisRow, mainAxisDimension, mainAxisPosition, crossAxisDimension, crossAxisPosition, containerMainSize, containerCrossSize, containerMainInnerSize, containerCrossInnerSize, paddingMainStart, paddingCrossStart, gapMain, gapCross, flexCanWrap, stretchChildren, children, childCount, true, false)
+			if forcedCrossSize == nil and resolvedCrossSize.unit == "auto" or resolvedCrossSize.unit == "fit-content" then
+				computedWidth = not isMainAxisRow and (linesCrossTotalLinesSize + paddingCrossStart + paddingCrossEnd) or computedWidth
+				computedHeight = isMainAxisRow and (linesCrossTotalLinesSize + paddingCrossStart + paddingCrossEnd) or computedHeight
 				containerCrossSize = isMainAxisRow and computedHeight or computedWidth
 				containerCrossInnerSize = linesCrossTotalLinesSize
 			end
-
-			if
-				forcedWidth == nil
-				and not pIsMainAxisRow
-				and pStretchChildren
-				and resolvedWidth.unit == "auto"
-				and (alignSelf == "auto" or alignSelf == "stretch")
-				and availableWidth
-			then
+			if forcedWidth == nil and not pIsMainAxisRow and pStretchChildren and resolvedWidth.unit == "auto" and (alignSelf == "auto" or alignSelf == "stretch") and availableWidth then
 				computedWidth = math.max(computedWidth, availableWidth)
-			elseif
-				forcedHeight == nil
-				and pIsMainAxisRow
-				and pStretchChildren
-				and resolvedHeight.unit == "auto"
-				and (alignSelf == "auto" or alignSelf == "stretch")
-				and availableHeight
-			then
+			elseif forcedHeight == nil and pIsMainAxisRow and pStretchChildren and resolvedHeight.unit == "auto" and (alignSelf == "auto" or alignSelf == "stretch") and availableHeight then
 				computedHeight = math.max(computedHeight, availableHeight)
 			end
 		end
-
 		if thirdPassChildren then
 			for i = 1, #thirdPassChildren do
 				local child = thirdPassChildren[i]
-
 				local childResolved = child.resolved
 				local childFlexGrow = childResolved.flexGrow.value
 				local childFlexShrink = childResolved.flexShrink.value
-
 				local line = thirdPassChildren[child]
 				local lineRemainingFreeSpace = line.remainingFreeSpace
-
 				if childFlexGrow > 0 and lineRemainingFreeSpace > 0 then
 					child.dirty = true
-
 					local childComputed = child.computed
 					local childComputedMainSize = childComputed.flexBasis
-
 					local flexGrowAmount = (childFlexGrow / line.totalFlexGrowFactor) * lineRemainingFreeSpace
-
-					local availableWidth = isMainAxisRow and containerMainSize ~= nil and containerMainInnerSize
-						or not isMainAxisRow and containerCrossSize ~= nil and containerCrossInnerSize
-					local availableHeight = isMainAxisRow and containerCrossSize ~= nil and containerCrossInnerSize
-						or not isMainAxisRow and containerMainSize ~= nil and containerMainInnerSize
-
+					local availableWidth = isMainAxisRow and containerMainSize ~= nil and containerMainInnerSize or not isMainAxisRow and containerCrossSize ~= nil and containerCrossInnerSize
+					local availableHeight = isMainAxisRow and containerCrossSize ~= nil and containerCrossInnerSize or not isMainAxisRow and containerMainSize ~= nil and containerMainInnerSize
 					local forcedWidth = isMainAxisRow and (childComputedMainSize + flexGrowAmount) or nil
 					local forcedHeight = not isMainAxisRow and (childComputedMainSize + flexGrowAmount) or nil
-
-					calculateLayout(
-						child,
-						availableWidth,
-						availableHeight,
-						forcedWidth,
-						forcedHeight,
-						isMainAxisRow,
-						stretchChildren
-					)
+					calculateLayout(child, availableWidth, availableHeight, forcedWidth, forcedHeight, isMainAxisRow, stretchChildren)
 				elseif childFlexShrink > 0 and lineRemainingFreeSpace < 0 then
 					child.dirty = true
-
 					local childComputed = child.computed
 					local childComputedMainSize = childComputed.flexBasis
-
-					local flexShrinkAmount = childComputedMainSize
-						* (childFlexShrink / line.totalFlexShrinkScaledFactor)
-						* -lineRemainingFreeSpace
-
-					local availableWidth = isMainAxisRow and containerMainSize ~= nil and containerMainInnerSize
-						or not isMainAxisRow and containerCrossSize ~= nil and containerCrossInnerSize
-					local availableHeight = isMainAxisRow and containerCrossSize ~= nil and containerCrossInnerSize
-						or not isMainAxisRow and containerMainSize ~= nil and containerMainInnerSize
-
+					local flexShrinkAmount = childComputedMainSize * (childFlexShrink / line.totalFlexShrinkScaledFactor) * -lineRemainingFreeSpace
+					local availableWidth = isMainAxisRow and containerMainSize ~= nil and containerMainInnerSize or not isMainAxisRow and containerCrossSize ~= nil and containerCrossInnerSize
+					local availableHeight = isMainAxisRow and containerCrossSize ~= nil and containerCrossInnerSize or not isMainAxisRow and containerMainSize ~= nil and containerMainInnerSize
 					local forcedWidth = isMainAxisRow and math.max(childComputedMainSize - flexShrinkAmount, 0) or nil
-					local forcedHeight = not isMainAxisRow and math.max(childComputedMainSize - flexShrinkAmount, 0)
-						or nil
-
-					calculateLayout(
-						child,
-						availableWidth,
-						availableHeight,
-						forcedWidth,
-						forcedHeight,
-						isMainAxisRow,
-						stretchChildren
-					)
+					local forcedHeight = not isMainAxisRow and math.max(childComputedMainSize - flexShrinkAmount, 0) or nil
+					calculateLayout(child, availableWidth, availableHeight, forcedWidth, forcedHeight, isMainAxisRow, stretchChildren)
 				end
 			end
 		end
-
-		local flexLinesAlignItemsOffset = alignItems == "center"
-				and (containerCrossInnerSize - linesCrossTotalLinesSize) * 0.5
-			or alignItems == "flex-end" and containerCrossInnerSize - linesCrossTotalLinesSize
-			or 0
-
-		for i = 1, #flexLines do
-			local currentLine = flexLines[i]
-
+		local flexLinesAlignItemsOffset = alignItems == "center" and (containerCrossInnerSize - linesCrossTotalLinesSize) * 0.5 or alignItems == "flex-end" and containerCrossInnerSize - linesCrossTotalLinesSize or 0
+		for i = 1, #lines do
+			local currentLine = lines[i]
 			local currentLineChildCount = #currentLine
 			local currentLineCrossSize = currentLine[crossAxisDimension]
 			local currentLineRemainingFreeSpace = currentLine.remainingFreeSpace
-
-			local currentLineJustifyContentGap = justifyContent == "space-between"
-					and currentLineChildCount > 1
-					and currentLineRemainingFreeSpace / (currentLineChildCount - 1)
-				or justifyContent == "space-around" and currentLineRemainingFreeSpace / currentLineChildCount
-				or justifyContent == "space-evenly" and currentLineRemainingFreeSpace / (currentLineChildCount + 1)
-				or 0
-
-			local currentLineJustifyContentOffset = justifyContent == "center" and currentLineRemainingFreeSpace * 0.5
-				or justifyContent == "flex-end" and currentLineRemainingFreeSpace
-				or justifyContent == "space-between" and 0
-				or justifyContent == "space-around" and currentLineJustifyContentGap * 0.5
-				or justifyContent == "space-evenly" and currentLineJustifyContentGap
-				or 0
-
+			local currentLineJustifyContentGap = justifyContent == "space-between" and currentLineChildCount > 1 and currentLineRemainingFreeSpace / (currentLineChildCount - 1) or justifyContent == "space-around" and currentLineRemainingFreeSpace / currentLineChildCount or justifyContent == "space-evenly" and currentLineRemainingFreeSpace / (currentLineChildCount + 1) or 0
+			local currentLineJustifyContentOffset = justifyContent == "center" and currentLineRemainingFreeSpace * 0.5 or justifyContent == "flex-end" and currentLineRemainingFreeSpace or justifyContent == "space-between" and 0 or justifyContent == "space-around" and currentLineJustifyContentGap * 0.5 or justifyContent == "space-evenly" and currentLineJustifyContentGap or 0
 			local caretMainPosition = currentLine[mainAxisPosition] + currentLineJustifyContentOffset
 			local caretCrossPosition = currentLine[crossAxisPosition] + flexLinesAlignItemsOffset
-
 			for i = 1, #currentLine do
 				local child = currentLine[i]
-
 				local childAttributes = child.__attributes
 				local childAlignSelf = childAttributes.alignSelf
-
-				if childAlignSelf == "auto" then
-					childAlignSelf = alignItems
-				end
-
+				if childAlignSelf == "auto" then childAlignSelf = alignItems end
 				local childComputed = child.computed
 				local childComputedCrossSize = childComputed[crossAxisDimension]
-
-				local childCrossOffset = childAlignSelf == "center"
-						and (currentLineCrossSize - childComputedCrossSize) * 0.5
-					or childAlignSelf == "flex-end" and currentLineCrossSize - childComputedCrossSize
-					or 0
-
-				childComputed[mainAxisPosition] = math.floor(caretMainPosition + 0.5)
-				childComputed[crossAxisPosition] = math.floor((caretCrossPosition + childCrossOffset) + 0.5)
-
+				local childCrossOffset = childAlignSelf == "center" and (currentLineCrossSize - childComputedCrossSize) * 0.5 or childAlignSelf == "flex-end" and currentLineCrossSize - childComputedCrossSize or 0
+				childComputed[mainAxisPosition] = caretMainPosition
+				childComputed[crossAxisPosition] = caretCrossPosition + childCrossOffset
 				local childResolved = child.resolved
-
 				local resolvedLeft = childResolved.left
 				local resolvedTop = childResolved.top
-
 				local resolvedRight = childResolved.right
 				local resolvedBottom = childResolved.bottom
-
-				childComputed.x = childComputed.x
-					+ (
-						resolvedLeft.unit ~= "auto" and childComputed.left
-						or resolvedRight.unit ~= "auto" and computedWidth - childComputed.right - childComputed.width
-						or 0
-					)
-				childComputed.y = childComputed.y
-					+ (
-						resolvedTop.unit ~= "auto" and childComputed.top
-						or resolvedBottom.unit ~= "auto" and computedHeight - childComputed.bottom - childComputed.height
-						or 0
-					)
-
-				caretMainPosition = caretMainPosition
-					+ childComputed[mainAxisDimension]
-					+ gapMain
-					+ currentLineJustifyContentGap
+				childComputed.x = childComputed.x + ( resolvedLeft.unit ~= "auto" and childComputed.left or resolvedRight.unit ~= "auto" and computedWidth - childComputed.right - childComputed.width or 0)
+				childComputed.y = childComputed.y + (resolvedTop.unit ~= "auto" and childComputed.top or resolvedBottom.unit ~= "auto" and computedHeight - childComputed.bottom - childComputed.height or 0)
+				childComputed.x = math.floor(childComputed.x + 0.5)
+				childComputed.y = math.floor(childComputed.y + 0.5)
+				caretMainPosition = caretMainPosition + childComputed[mainAxisDimension] + gapMain + currentLineJustifyContentGap
 			end
 		end
-
 		if absoluteChildren then
 			for i = 1, #absoluteChildren do
 				local child = absoluteChildren[i]
-
 				local childResolved = child.resolved
-
 				local resolvedLeft = childResolved.left
 				local resolvedTop = childResolved.top
-
 				local resolvedRight = childResolved.right
 				local resolvedBottom = childResolved.bottom
-
 				local childComputed = child.computed
-
 				local childComputedWidth = childComputed.width
 				local childComputedHeight = childComputed.height
-
-				childComputed.x = resolvedLeft.unit ~= "auto" and childComputed.left
-					or resolvedRight.unit ~= "auto" and computedWidth - childComputed.right - childComputedWidth
-					or 0
-				childComputed.y = resolvedTop.unit ~= "auto" and childComputed.top
-					or resolvedBottom.unit ~= "auto" and computedHeight - childComputed.bottom - childComputedHeight
-					or 0
+				childComputed.x = resolvedLeft.unit ~= "auto" and childComputed.left or resolvedRight.unit ~= "auto" and computedWidth - childComputed.right - childComputedWidth or 0
+				childComputed.y = resolvedTop.unit ~= "auto" and childComputed.top or resolvedBottom.unit ~= "auto" and computedHeight - childComputed.bottom - childComputedHeight or 0
 			end
 		end
 	else
 		local measuredWidth
 		local measuredHeight
-
-		if node.measure then
-			measuredWidth, measuredHeight = node:measure()
-		end
-
-		if
-			measuredWidth
-			and not computedWidth
-			and (resolvedWidth.unit == "auto" or resolvedHeight.unit == "fit-content")
-		then
-			computedWidth = measuredWidth + computedPaddingLeft + computedPaddingRight
-		end
-
-		if
-			measuredHeight
-			and not computedHeight
-			and (resolvedHeight.unit == "auto" or resolvedHeight.unit == "fit-content")
-		then
-			computedHeight = measuredHeight + computedPaddingTop + computedPaddingBottom
-		end
+		if node.measure then measuredWidth, measuredHeight = node:measure() end
+		if measuredWidth and not computedWidth and (resolvedWidth.unit == "auto" or resolvedHeight.unit == "fit-content") then computedWidth = measuredWidth + computedPaddingLeft + computedPaddingRight end
+		if measuredHeight and not computedHeight and (resolvedHeight.unit == "auto" or resolvedHeight.unit == "fit-content") then computedHeight = measuredHeight + computedPaddingTop + computedPaddingBottom end
 	end
-
 	computed.width = math.floor((computedWidth or 0) + 0.5)
 	computed.height = math.floor((computedHeight or 0) or 0.5)
-
-	if not forcedWidth then
-		computed.flexBasis = pIsMainAxisRow and computed.width or computed.flexBasis
-	end
-
-	if not forcedHeight then
-		computed.flexBasis = not pIsMainAxisRow and computed.height or computed.flexBasis
-	end
-
+	if not forcedWidth then computed.flexBasis = pIsMainAxisRow and computed.width or computed.flexBasis end
+	if not forcedHeight then computed.flexBasis = not pIsMainAxisRow and computed.height or computed.flexBasis end
 	return true
 end
 
@@ -1379,7 +896,6 @@ local RectangleShaderString = [[
 	{
 		borderRadius.xy = (position.x > 0.0) ? borderRadius.yw : borderRadius.xz;
 		borderRadius.x = (position.y > 0.0) ? borderRadius.x : borderRadius.y;
-
 		float2 q = abs(position) - size + borderRadius.x;
 		return length(max(q, 0.0)) + min(max(q.x, q.y), 0.0) - borderRadius.x;
 	}
@@ -1387,35 +903,23 @@ local RectangleShaderString = [[
 	float4 pixel(float2 texcoord: TEXCOORD0, float4 color: COLOR0): COLOR0
 	{
 		texcoord -= 0.5;
-
 		float2 dx = ddx(texcoord);
 		float2 dy = ddy(texcoord);
 		float2 resolution = float2(length(float2(dx.x, dy.x)), length(float2(dx.y, dy.y)));
-
 		float aspectRatio = resolution.x / resolution.y;
   	float scaleFactor = (aspectRatio <= 1.0) ? resolution.y : resolution.x;
-
 		if (aspectRatio <= 1.0)
-		{
 			texcoord.x /= aspectRatio;
-		}
 		else
-		{
 			texcoord.y *= aspectRatio;
-		}
-
 		float4 borderRadius = BORDER_RADIUS * scaleFactor;
 		float4 strokeWeight = STROKE_WEIGHT * scaleFactor;
-
 		float2 position = texcoord;
 		float2 size = float2(1.0 / ((aspectRatio <= 1.0) ? aspectRatio : 1.0), (aspectRatio <= 1.0) ? 1.0 : aspectRatio) * 0.5 - strokeWeight.x * 0.5;
-
 		float sdf = sdRectangle(position, size, borderRadius);
 		float aa = length(fwidth(position));
-
 		float alpha = any(strokeWeight) ? stroke(sdf, strokeWeight.x, aa, 0.0) : fill(sdf, aa, 0.0);
 		color.a *= alpha;
-
 		return color;
 	}
 
@@ -1433,32 +937,22 @@ local RectangleShaderString = [[
 
 local function renderer(node, pX, pY, pColor)
 	local attributes = node.__attributes
-
-	if not attributes.visible then
-		return false
-	end
-
+	if not attributes.visible then return false end
 	local computed = node.computed
-
 	local computedWidth = computed.width
 	local computedHeight = computed.height
-
 	local x = pX + computed.x
 	local y = pY + computed.y
-
 	local resolved = node.resolved
-
 	local resolvedBorderRadius = resolved.borderRadius
 	local resolvedBorderTopLeftRadius = resolved.borderTopLeftRadius
 	local resolvedBorderTopRightRadius = resolved.borderTopRightRadius
 	local resolvedBorderBottomLeftRadius = resolved.borderBottomLeftRadius
 	local resolvedBorderBottomRightRadius = resolved.borderBottomRightRadius
-
 	local renderBorderTopLeftRadius = 0
 	local renderBorderTopRightRadius = 0
 	local renderBorderBottomLeftRadius = 0
 	local renderBorderBottomRightRadius = 0
-
 	if resolvedBorderRadius.unit == "pixel" then
 		local renderBorderRadius = resolvedBorderRadius.value
 		renderBorderTopLeftRadius = renderBorderRadius
@@ -1472,46 +966,35 @@ local function renderer(node, pX, pY, pColor)
 		renderBorderBottomLeftRadius = renderBorderRadius
 		renderBorderBottomRightRadius = renderBorderRadius
 	end
-
 	if resolvedBorderTopLeftRadius.unit == "pixel" then
 		renderBorderTopLeftRadius = resolvedBorderTopLeftRadius.value
 	elseif resolvedBorderTopLeftRadius.unit == "percentage" then
 		renderBorderTopLeftRadius = resolvedBorderTopLeftRadius.value * math.min(computedWidth, computedHeight) * 0.5
 	end
-
 	if resolvedBorderTopRightRadius.unit == "pixel" then
 		renderBorderTopRightRadius = resolvedBorderTopRightRadius.value
 	elseif resolvedBorderTopRightRadius.unit == "percentage" then
 		renderBorderTopRightRadius = resolvedBorderTopRightRadius.value * math.min(computedWidth, computedHeight) * 0.5
 	end
-
 	if resolvedBorderBottomLeftRadius.unit == "pixel" then
 		renderBorderBottomLeftRadius = resolvedBorderBottomLeftRadius.value
 	elseif resolvedBorderBottomLeftRadius.unit == "percentage" then
-		renderBorderBottomLeftRadius = resolvedBorderBottomLeftRadius.value
-			* math.min(computedWidth, computedHeight)
-			* 0.5
+		renderBorderBottomLeftRadius = resolvedBorderBottomLeftRadius.value * math.min(computedWidth, computedHeight) * 0.5
 	end
-
 	if resolvedBorderBottomRightRadius.unit == "pixel" then
 		renderBorderBottomRightRadius = resolvedBorderBottomRightRadius.value
 	elseif resolvedBorderBottomRightRadius.unit == "percentage" then
-		renderBorderBottomRightRadius = resolvedBorderBottomRightRadius.value
-			* math.min(computedWidth, computedHeight)
-			* 0.5
+		renderBorderBottomRightRadius = resolvedBorderBottomRightRadius.value * math.min(computedWidth, computedHeight) * 0.5
 	end
-
 	local resolvedStrokeWeight = resolved.strokeWeight
 	local resolvedStrokeLeftWeight = resolved.strokeLeftWeight
 	local resolvedStrokeTopWeight = resolved.strokeTopWeight
 	local resolvedStrokeRightWeight = resolved.strokeRightWeight
 	local resolvedStrokeBottomWeight = resolved.strokeBottomWeight
-
 	local renderStrokeLeftWeight = 0
 	local renderStrokeTopWeight = 0
 	local renderStrokeRightWeight = 0
 	local renderStrokeBottomWeight = 0
-
 	if resolvedStrokeWeight.unit == "pixel" then
 		local renderStrokeWeight = resolvedStrokeWeight.value
 		renderStrokeLeftWeight = renderStrokeWeight
@@ -1519,57 +1002,25 @@ local function renderer(node, pX, pY, pColor)
 		renderStrokeRightWeight = renderStrokeWeight
 		renderStrokeBottomWeight = renderStrokeWeight
 	end
-
-	if resolvedStrokeLeftWeight.unit == "pixel" then
-		renderStrokeLeftWeight = resolvedStrokeLeftWeight.value
-	end
-
-	if resolvedStrokeTopWeight.unit == "pixel" then
-		renderStrokeTopWeight = resolvedStrokeTopWeight.value
-	end
-
-	if resolvedStrokeRightWeight.unit == "pixel" then
-		renderStrokeRightWeight = resolvedStrokeRightWeight.value
-	end
-
-	if resolvedStrokeBottomWeight.unit == "pixel" then
-		renderStrokeBottomWeight = resolvedStrokeBottomWeight.value
-	end
-
-	local usingRectangleShader = renderBorderTopLeftRadius > 0
-		or renderBorderTopRightRadius > 0
-		or renderBorderBottomLeftRadius > 0
-		or renderBorderBottomRightRadius > 0
-
+	if resolvedStrokeLeftWeight.unit == "pixel" then renderStrokeLeftWeight = resolvedStrokeLeftWeight.value end
+	if resolvedStrokeTopWeight.unit == "pixel" then renderStrokeTopWeight = resolvedStrokeTopWeight.value end
+	if resolvedStrokeRightWeight.unit == "pixel" then renderStrokeRightWeight = resolvedStrokeRightWeight.value end
+	if resolvedStrokeBottomWeight.unit == "pixel" then renderStrokeBottomWeight = resolvedStrokeBottomWeight.value end
+	local usingRectangleShader = renderBorderTopLeftRadius > 0 or renderBorderTopRightRadius > 0 or renderBorderBottomLeftRadius > 0 or renderBorderBottomRightRadius > 0
 	local attributes = node.__attributes
 	local backgroundColor = attributes.backgroundColor
 	local strokeColor = attributes.strokeColor
 	local color = attributes.color
-
-	if not color then
-		color = pColor
-	end
-
+	if not color then color = pColor end
 	local render = node.render
-
 	render.width = computedWidth
 	render.height = computedHeight
-
 	render.x = x
 	render.y = y
-
 	local renderBackgroundShader = render.backgroundShader
 	local hasBackground = getColorAlpha(backgroundColor) > 0
-
 	local renderStrokeShader = render.strokeShader
-	local hasStroke = getColorAlpha(strokeColor) > 0
-		and (
-			renderStrokeLeftWeight > 0
-			or renderStrokeTopWeight > 0
-			or renderStrokeRightWeight > 0
-			or renderStrokeBottomWeight > 0
-		)
-
+	local hasStroke = getColorAlpha(strokeColor) > 0 and (renderStrokeLeftWeight > 0 or renderStrokeTopWeight > 0 or renderStrokeRightWeight > 0 or renderStrokeBottomWeight > 0)
 	if usingRectangleShader then
 		if hasBackground then
 			if renderBackgroundShader == nil then
@@ -1577,100 +1028,47 @@ local function renderer(node, pX, pY, pColor)
 				render.backgroundShader = renderBackgroundShader
 			end
 		end
-
 		if hasStroke then
 			if renderStrokeShader == nil then
 				renderStrokeShader = dxCreateShader(RectangleShaderString)
 				render.strokeShader = renderStrokeShader
 			end
 		end
-
 		local previousBorderTopLeftRadius = render.borderTopLeftRadius
 		local previousBorderTopRightRadius = render.borderTopRightRadius
 		local previousBorderBottomLeftRadius = render.borderBottomLeftRadius
 		local previousBorderBottomRightRadius = render.borderBottomRightRadius
-
-		if
-			renderBorderTopLeftRadius ~= previousBorderTopLeftRadius
-			or renderBorderTopRightRadius ~= previousBorderTopRightRadius
-			or renderBorderBottomLeftRadius ~= previousBorderBottomLeftRadius
-			or renderBorderBottomRightRadius ~= previousBorderBottomRightRadius
-		then
+		if renderBorderTopLeftRadius ~= previousBorderTopLeftRadius or renderBorderTopRightRadius ~= previousBorderTopRightRadius or renderBorderBottomLeftRadius ~= previousBorderBottomLeftRadius or renderBorderBottomRightRadius ~= previousBorderBottomRightRadius then
 			render.borderTopLeftRadius = renderBorderTopLeftRadius
 			render.borderTopRightRadius = renderBorderTopRightRadius
 			render.borderBottomLeftRadius = renderBorderBottomLeftRadius
 			render.borderBottomRightRadius = renderBorderBottomRightRadius
-
-			if renderBackgroundShader and isElement(renderBackgroundShader) then
-				dxSetShaderValue(
-					renderBackgroundShader,
-					"BORDER_RADIUS",
-					renderBorderTopLeftRadius,
-					renderBorderTopRightRadius,
-					renderBorderBottomLeftRadius,
-					renderBorderBottomRightRadius
-				)
-			end
-
-			if renderStrokeShader and isElement(renderStrokeShader) then
-				dxSetShaderValue(
-					renderStrokeShader,
-					"BORDER_RADIUS",
-					renderBorderTopLeftRadius,
-					renderBorderTopRightRadius,
-					renderBorderBottomLeftRadius,
-					renderBorderBottomRightRadius
-				)
-			end
+			if renderBackgroundShader and isElement(renderBackgroundShader) then dxSetShaderValue(renderBackgroundShader, "BORDER_RADIUS", renderBorderTopLeftRadius, renderBorderTopRightRadius, renderBorderBottomLeftRadius, renderBorderBottomRightRadius) end
+			if renderStrokeShader and isElement(renderStrokeShader) then dxSetShaderValue(renderStrokeShader, "BORDER_RADIUS", renderBorderTopLeftRadius, renderBorderTopRightRadius, renderBorderBottomLeftRadius, renderBorderBottomRightRadius) end
 		end
-
 		local previousStrokeLeftWeight = render.strokeLeftWeight
 		local previousStrokeTopWeight = render.strokeTopWeight
 		local previousStrokeRightWeight = render.strokeRightWeight
 		local previousStrokeBottomWeight = render.strokeBottomWeight
-
-		if
-			renderStrokeLeftWeight ~= previousStrokeLeftWeight
-			or renderStrokeTopWeight ~= previousStrokeTopWeight
-			or renderStrokeRightWeight ~= previousStrokeRightWeight
-			or renderStrokeBottomWeight ~= previousStrokeBottomWeight
-		then
+		if renderStrokeLeftWeight ~= previousStrokeLeftWeight or renderStrokeTopWeight ~= previousStrokeTopWeight or renderStrokeRightWeight ~= previousStrokeRightWeight or renderStrokeBottomWeight ~= previousStrokeBottomWeight then
 			render.strokeLeftWeight = renderStrokeLeftWeight
 			render.strokeTopWeight = renderStrokeTopWeight
 			render.strokeRightWeight = renderStrokeRightWeight
 			render.strokeBottomWeight = renderStrokeBottomWeight
-
-			if renderStrokeShader and isElement(renderStrokeShader) then
-				dxSetShaderValue(
-					renderStrokeShader,
-					"STROKE_WEIGHT",
-					renderStrokeLeftWeight,
-					renderStrokeTopWeight,
-					renderStrokeRightWeight,
-					renderStrokeBottomWeight
-				)
-			end
+			if renderStrokeShader and isElement(renderStrokeShader) then dxSetShaderValue(renderStrokeShader, "STROKE_WEIGHT", renderStrokeLeftWeight, renderStrokeTopWeight, renderStrokeRightWeight, renderStrokeBottomWeight) end
 		end
 	else
 		if renderBackgroundShader ~= nil then
-			if renderBackgroundShader and isElement(renderBackgroundShader) then
-				destroyElement(renderBackgroundShader)
-			end
-
+			if renderBackgroundShader and isElement(renderBackgroundShader) then destroyElement(renderBackgroundShader) end
 			renderBackgroundShader = nil
 			render.backgroundShader = renderBackgroundShader
 		end
-
 		if renderStrokeShader ~= nil then
-			if renderStrokeShader and isElement(renderStrokeShader) then
-				destroyElement(renderStrokeShader)
-			end
-
+			if renderStrokeShader and isElement(renderStrokeShader) then destroyElement(renderStrokeShader) end
 			renderStrokeShader = nil
 			render.strokeShader = renderStrokeShader
 		end
 	end
-
 	if hasBackground then
 		if usingRectangleShader and renderBackgroundShader and isElement(renderBackgroundShader) then
 			dxDrawImage(x, y, computedWidth, computedHeight, renderBackgroundShader, 0, 0, 0, backgroundColor)
@@ -1678,41 +1076,20 @@ local function renderer(node, pX, pY, pColor)
 			dxDrawRectangle(x, y, computedWidth, computedHeight, backgroundColor)
 		end
 	end
-
 	if hasStroke then
 		if usingRectangleShader and renderStrokeShader and isElement(renderStrokeShader) then
 			dxDrawImage(x, y, computedWidth, computedHeight, renderStrokeShader, 0, 0, 0, strokeColor)
 		else
 			dxDrawRectangle(x, y, renderStrokeLeftWeight, computedHeight, strokeColor)
 			dxDrawRectangle(x, y, computedWidth, renderStrokeTopWeight, strokeColor)
-			dxDrawRectangle(
-				x + computedWidth - renderStrokeRightWeight,
-				y,
-				renderStrokeRightWeight,
-				computedHeight,
-				strokeColor
-			)
-			dxDrawRectangle(
-				x,
-				y + computedHeight - renderStrokeBottomWeight,
-				computedWidth,
-				renderStrokeBottomWeight,
-				strokeColor
-			)
+			dxDrawRectangle(x + computedWidth - renderStrokeRightWeight, y, renderStrokeRightWeight, computedHeight, strokeColor)
+			dxDrawRectangle(x, y + computedHeight - renderStrokeBottomWeight, computedWidth, renderStrokeBottomWeight, strokeColor)
 		end
 	end
-
-	if node.draw and getColorAlpha(color) > 0 then
-		node:draw(x, y, computedWidth, computedHeight, color)
-	end
-
+	if node.draw and getColorAlpha(color) > 0 then node:draw(x, y, computedWidth, computedHeight, color) end
 	local children = node.children
 	local childCount = children and #children or 0
-
-	for i = 1, childCount do
-		renderer(children[i], x, y, color)
-	end
-
+	for i = 1, childCount do renderer(children[i], x, y, color) end
 	return true
 end
 
@@ -1720,62 +1097,33 @@ local tree = Node()
 
 local function getHoveredNode(cursorX, cursorY, node)
 	local attributes = node.__attributes
-
-	if not attributes.visible then
-		return nil
-	end
-
+	if not attributes.visible then return nil end
 	local hoveredNode
-
 	local render = node.render
-
 	local renderWidth = render.width
 	local renderHeight = render.height
-
 	local renderX = render.x
 	local renderY = render.y
-
-	local hovering = cursorX >= renderX
-		and cursorY >= renderY
-		and cursorX <= renderX + renderWidth
-		and cursorY <= renderY + renderHeight
-
+	local hovering = cursorX >= renderX and cursorY >= renderY and cursorX <= renderX + renderWidth and cursorY <= renderY + renderHeight
 	local states = node.states
-
 	if hovering and not states.hovered then
 		states.hovered = true
-
-		if node.onCursorEnter then
-			node:onCursorEnter(cursorX, cursorY)
-		end
+		if node.onCursorEnter then node:onCursorEnter(cursorX, cursorY) end
 	elseif not hovering and states.hovered then
 		states.hovered = false
-
-		if node.onCursorLeave then
-			node:onCursorLeave(cursorX, cursorY)
-		end
+		if node.onCursorLeave then node:onCursorLeave(cursorX, cursorY) end
 	end
-
 	local children = node.children
 	local childCount = #children
-
 	for i = 1, childCount do
 		local child = children[i]
 		local childAttributes = child.__attributes
-
 		if childAttributes.visible then
 			local hoveredChild = getHoveredNode(cursorX, cursorY, child)
-
-			if hoveredChild then
-				hoveredNode = hoveredChild
-			end
+			if hoveredChild then hoveredNode = hoveredChild end
 		end
 	end
-
-	if hovering and not hoveredNode then
-		hoveredNode = node
-	end
-
+	if hovering and not hoveredNode then hoveredNode = node end
 	return hoveredNode
 end
 
@@ -1792,25 +1140,15 @@ local cursorButton = {
 
 local function cursor()
 	local cursorShowing = isCursorShowing()
-
 	if cursorShowing then
 		cursorX, cursorY = getCursorPosition()
-
 		cursorX = cursorX * screenWidth
 		cursorY = cursorY * screenHeight
-
 		local hoveredNode = getHoveredNode(cursorX, cursorY, tree)
-
 		if hoveredNode ~= cursorHoveredNode then
-			if cursorHoveredNode and cursorHoveredNode.onCursorOut then
-				cursorHoveredNode:onCursorOut(cursorX, cursorY)
-			end
-
+			if cursorHoveredNode and cursorHoveredNode.onCursorOut then cursorHoveredNode:onCursorOut(cursorX, cursorY) end
 			cursorHoveredNode = hoveredNode
-
-			if cursorHoveredNode and cursorHoveredNode.onCursorOver then
-				cursorHoveredNode:onCursorOver(cursorX, cursorY)
-			end
+			if cursorHoveredNode and cursorHoveredNode.onCursorOver then cursorHoveredNode:onCursorOver(cursorX, cursorY) end
 		end
 	else
 		cursorX = -screenWidth
@@ -1824,37 +1162,22 @@ end)
 
 addEventHandler("onClientClick", root, function(button, state)
 	local data = cursorButton[button]
-
 	data.x = cursorX
 	data.y = cursorY
-
 	local pressed = state == "down"
 	data.pressed = pressed
-
 	if pressed then
 		if cursorHoveredNode then
 			cursorHoveredNode.states.clicked = true
-
 			data.clickedNode = cursorHoveredNode
-
-			if cursorHoveredNode.onCursorDown then
-				cursorHoveredNode:onCursorDown(button, pressed, cursorX, cursorY)
-			end
+			if cursorHoveredNode.onCursorDown then cursorHoveredNode:onCursorDown(button, pressed, cursorX, cursorY) end
 		end
 	else
 		local cursorClickedNode = data.clickedNode
-
 		if cursorClickedNode then
 			cursorClickedNode.states.clicked = false
-
-			if cursorClickedNode.onCursorUp then
-				cursorClickedNode:onCursorUp(button, pressed, cursorX, cursorY)
-			end
-
-			if cursorClickedNode == cursorHoveredNode and cursorClickedNode.onClick then
-				cursorClickedNode:onClick(button, cursorX, cursorY)
-			end
-
+			if cursorClickedNode.onCursorUp then cursorClickedNode:onCursorUp(button, pressed, cursorX, cursorY) end
+			if cursorClickedNode == cursorHoveredNode and cursorClickedNode.onClick then cursorClickedNode:onClick(button, cursorX, cursorY) end
 			data.clickedNode = false
 		end
 	end
