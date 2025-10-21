@@ -244,66 +244,63 @@ local function hue(color)
 	local r = math.floor(color / 0x10000) % 0x100
 	local g = math.floor(color / 0x100) % 0x100
 	local b = color % 0x100
-	r = r / 255
-	g = g / 255
-	b = b / 255
-	local maxc = math.max(r, g, b)
-	local minc = math.min(r, g, b)
-	local delta = maxc - minc
-	local hue
+	r, g, b = r / 255, g / 255, b / 255
+	local cmax = math.max(r, g, b)
+	local cmin = math.min(r, g, b)
+	local delta = cmax - cmin
+	local h
 	if delta == 0 then
-		hue = 0
-	elseif maxc == r then
-		hue = ((g - b) / delta) % 6
-	elseif maxc == g then
-		hue = ((b - r) / delta) + 2
+		h = 0
+	elseif cmax == r then
+		h = 60 * (((g - b) / delta) % 6)
+	elseif cmax == g then
+		h = 60 * (((b - r) / delta) + 2)
 	else
-		hue = ((r - g) / delta) + 4
+		h = 60 * (((r - g) / delta) + 4)
 	end
-	hue = hue * 60
-	if hue < 0 then
-		hue = hue + 360
+	local l = (cmax + cmin) * 0.5
+	local s
+	if delta == 0 then
+		s = 0
+	else
+		s = delta / (1 - math.abs(2 * l - 1))
 	end
-	return hue
-end
-
-local function hue2rgb(p, q, t)
-	local tmod = t
-	if tmod < 0 then
-		tmod = tmod + 1
-	end
-	if tmod > 1 then
-		tmod = tmod - 1
-	end
-	if tmod < 1 / 6 then
-		return p + (q - p) * 6 * tmod
-	elseif tmod < 1 / 2 then
-		return q
-	elseif tmod < 2 / 3 then
-		return p + (q - p) * (2 / 3 - tmod) * 6
-	end
-	return p
+	return h, s, l
 end
 
 local function hsl(h, s, l, alpha)
-	local red, green, blue
-	if s == 0 then
-		red, green, blue = l, l, l
+	h = h % 360
+	if s == nil or type(s) ~= "number" then s = 1 end
+	if l == nil or type(l) ~= "number" then l = 0.5 end
+	if alpha == nil or type(alpha) ~= "number" then alpha = 1 end
+	local c = (1 - math.abs(2 * l - 1)) * s
+	local x = c * (1 - math.abs((h / 60) % 2 - 1))
+	local m = l - c * 0.5
+	local r, g, b
+	if h < 60 then
+		r, g, b = c, x, 0
+	elseif h < 120 then
+		r, g, b = x, c, 0
+	elseif h < 180 then
+		r, g, b = 0, c, x
+	elseif h < 240 then
+		r, g, b = 0, x, c
+	elseif h < 300 then
+		r, g, b = x, 0, c
 	else
-		local q = (l < 0.5) and (l * (1 + s)) or (l + s - l * s)
-		local p = 2 * l - q
-		local huer = h + 1 / 3
-		local hueg = h
-		local hueb = h - 1 / 3
-		red = hue2rgb(p, q, huer)
-		green = hue2rgb(p, q, hueg)
-		blue = hue2rgb(p, q, hueb)
+		r, g, b = c, 0, x
 	end
-	local r = math.floor(red * 255 + 0.5)
-	local g = math.floor(green * 255 + 0.5)
-	local b = math.floor(blue * 255 + 0.5)
-	local a = math.floor((alpha or 1) * 255 + 0.5)
+	r = math.floor((r + m) * 255 + 0.5)
+	g = math.floor((g + m) * 255 + 0.5)
+	b = math.floor((b + m) * 255 + 0.5)
+	local a = math.floor(alpha * 255 + 0.5)
 	return a * 0x1000000 + r * 0x10000 + g * 0x100 + b
+end
+
+local function lighten(color, delta)
+	local hue, saturation, lightness = hue(color)
+	lightness = math.max(0, math.min(lightness + delta, 1))
+	return hsl(hue, saturation, lightness)
 end
 
 local materialTypes = {
@@ -318,6 +315,51 @@ local function isValidMaterial(material)
 	if not materialTypes[type] then return false end
 	return true, type
 end
+
+local IDs = {}
+
+local function setNodeId(node, id)
+	if type(id) ~= "string" or #id == 0 then return false end
+	IDs[id] = node
+	IDs[node] = id
+	return true
+end
+
+local function getNodeFromId(id)
+	local node = IDs[id]
+	return node ~= nil and node
+end
+
+local attributeAffectsLayout = {
+	alignItems = true,
+	alignSelf = true,
+	bottom = true,
+	display = true,
+	flexDirection = true,
+	flexGrow = true,
+	flexShrink = true,
+	flexWrap = true,
+	font = true,
+	gap = true,
+	height = true,
+	justifyContent = true,
+	left = true,
+	material = true,
+	padding = true,
+	paddingBottom = true,
+	paddingLeft = true,
+	paddingRight = true,
+	paddingTop = true,
+	position = true,
+	right = true,
+	text = true,
+	textColorCoded = true,
+	textSize = true,
+	textWordWrap = true,
+	top = true,
+	visible = true,
+	width = true,
+}
 
 local Node = createClass()
 Node.__node__ = true
@@ -368,6 +410,7 @@ function Node:constructor(attributes, ...)
 		borderTopLeftRadius = "auto",
 		borderTopRightRadius = "auto",
 		bottom = "auto",
+		clickable = true,
 		color = false,
 		display = "flex",
 		flexDirection = "row",
@@ -377,6 +420,8 @@ function Node:constructor(attributes, ...)
 		font = "default",
 		gap = "auto",
 		height = "auto",
+		hoverable = true,
+		id = "",
 		justifyContent = "flex-start",
 		left = "auto",
 		material = false,
@@ -407,7 +452,9 @@ function Node:constructor(attributes, ...)
 	self.attributes = createProxy(self.__attributes, function(key, value)
 		local resolvedAttribute = self.resolved[key]
 		if resolvedAttribute then resolvedAttribute.value, resolvedAttribute.unit = resolveLength(value) end
-		if key == "material" then
+		if key == "id" then
+			setNodeId(self, value)
+		elseif key == "material" then
 			local computed = self.computed
 			local materialWidth = 0
 			local materialHeight = 0
@@ -417,7 +464,7 @@ function Node:constructor(attributes, ...)
 			computed.materialWidth = materialWidth
 			computed.materialHeight = materialHeight
 		end
-		self:markDirty()
+		if attributeAffectsLayout[key] then self:markDirty() end
 	end)
 	self.computed = {
 		bottom = 0,
@@ -577,6 +624,21 @@ function Image:draw(x, y, width, height, color)
 	end
 end
 
+Button = createClass(Node)
+Button.__button__ = true
+
+function Button:constructor(attributes, ...)
+	if attributes.hoverable ~= nil then
+		attributes.hoverable = false
+	end
+	local childCount = select("#", ...)
+	for i = 1, childCount do
+		local child = select(i, ...)
+		child.__attributes.hoverable = false
+	end
+	Node.constructor(self, attributes, ...)
+end
+
 local splitChildrenIntoLines
 local calculateLayout
 
@@ -607,7 +669,7 @@ function splitChildrenIntoLines(node, isMainAxisRow, mainAxisDimension, mainAxis
 				local childResolvedMainSize = childResolved[mainAxisDimension]
 				local childResolvedCrossSize = childResolved[crossAxisDimension]
 				local childAlignSelf = childAttributes.alignSelf
-				if childResolvedMainSize.unit == "percentage" and containerMainSize == nil or (childResolvedCrossSize.unit == "auto" and stretchChildren and (childAlignSelf == "auto" or childAlignSelf == "stretch") and childPosition == "relative" or childResolvedCrossSize.unit == "percentage" and containerCrossSize == nil) then
+				if childResolvedMainSize.unit == "percentage" and containerMainSize == nil or (childResolvedCrossSize.unit == "auto" and stretchChildren and (childAlignSelf == "auto" or childAlignSelf == "stretch") and childPosition == "relative") or childResolvedCrossSize.unit == "percentage" and containerCrossSize == nil then
 					if not secondPassChildren then secondPassChildren = {} end
 					table.insert(secondPassChildren, child)
 				end
@@ -763,13 +825,15 @@ function calculateLayout(node, availableWidth, availableHeight, forcedWidth, for
 			computedWidth = isMainAxisRow and (linesMainMaximumLineSize + paddingMainStart + paddingMainEnd) or computedWidth
 			computedHeight = not isMainAxisRow and (linesMainMaximumLineSize + paddingMainStart + paddingMainEnd) or computedHeight
 			containerMainSize = isMainAxisRow and computedWidth or computedHeight
-			containerMainInnerSize = linesMainMaximumLineSize
+			containerMainInnerSize = math.max(containerMainSize - paddingMainStart - paddingMainEnd, 0)
 		end
-		if forcedCrossSize == nil and resolvedCrossSize.unit == "auto" or resolvedCrossSize.unit == "fit-content" then
+		local containerCrossSizeFitToContent = false
+		if forcedCrossSize == nil and containerCrossSize == nil and resolvedCrossSize.unit == "auto" or resolvedCrossSize.unit == "fit-content" then
 			computedWidth = not isMainAxisRow and (linesCrossTotalLinesSize + paddingCrossStart + paddingCrossEnd) or computedWidth
 			computedHeight = isMainAxisRow and (linesCrossTotalLinesSize + paddingCrossStart + paddingCrossEnd) or computedHeight
 			containerCrossSize = isMainAxisRow and computedHeight or computedWidth
-			containerCrossInnerSize = linesCrossTotalLinesSize
+			containerCrossInnerSize = math.max(containerCrossSize - paddingCrossStart - paddingCrossEnd, 0)
+			containerCrossSizeFitToContent = true
 		end
 		if forcedWidth == nil and not pIsMainAxisRow and pStretchChildren and resolvedWidth.unit == "auto" and (alignSelf == "auto" or alignSelf == "stretch") and availableWidth then
 			computedWidth = math.max(computedWidth, availableWidth)
@@ -785,11 +849,11 @@ function calculateLayout(node, availableWidth, availableHeight, forcedWidth, for
 				calculateLayout(child, availableWidth, availableHeight, nil, nil, isMainAxisRow, stretchChildren)
 			end
 			lines, _, linesCrossTotalLinesSize, _, thirdPassChildren = splitChildrenIntoLines(node, isMainAxisRow, mainAxisDimension, mainAxisPosition, crossAxisDimension, crossAxisPosition, containerMainSize, containerCrossSize, containerMainInnerSize, containerCrossInnerSize, paddingMainStart, paddingCrossStart, gapMain, gapCross, flexCanWrap, stretchChildren, children, childCount, true, false)
-			if forcedCrossSize == nil and resolvedCrossSize.unit == "auto" or resolvedCrossSize.unit == "fit-content" then
+			if forcedCrossSize == nil and containerCrossSizeFitToContent and resolvedCrossSize.unit == "auto" or resolvedCrossSize.unit == "fit-content" then
 				computedWidth = not isMainAxisRow and (linesCrossTotalLinesSize + paddingCrossStart + paddingCrossEnd) or computedWidth
 				computedHeight = isMainAxisRow and (linesCrossTotalLinesSize + paddingCrossStart + paddingCrossEnd) or computedHeight
 				containerCrossSize = isMainAxisRow and computedHeight or computedWidth
-				containerCrossInnerSize = linesCrossTotalLinesSize
+				containerCrossInnerSize = math.max(containerCrossSize - paddingCrossStart - paddingCrossEnd, 0)
 			end
 			if forcedWidth == nil and not pIsMainAxisRow and pStretchChildren and resolvedWidth.unit == "auto" and (alignSelf == "auto" or alignSelf == "stretch") and availableWidth then
 				computedWidth = math.max(computedWidth, availableWidth)
@@ -800,32 +864,30 @@ function calculateLayout(node, availableWidth, availableHeight, forcedWidth, for
 		if thirdPassChildren then
 			for i = 1, #thirdPassChildren do
 				local child = thirdPassChildren[i]
+				child.dirty = true
 				local childResolved = child.resolved
 				local childFlexGrow = childResolved.flexGrow.value
 				local childFlexShrink = childResolved.flexShrink.value
 				local line = thirdPassChildren[child]
 				local lineRemainingFreeSpace = line.remainingFreeSpace
+				local availableWidth = isMainAxisRow and containerMainSize ~= nil and containerMainInnerSize or not isMainAxisRow and containerCrossSize ~= nil and containerCrossInnerSize
+				local availableHeight = isMainAxisRow and containerCrossSize ~= nil and containerCrossInnerSize or not isMainAxisRow and containerMainSize ~= nil and containerMainInnerSize
+				local forcedWidth
+				local forcedHeight
 				if childFlexGrow > 0 and lineRemainingFreeSpace > 0 then
-					child.dirty = true
 					local childComputed = child.computed
 					local childComputedMainSize = childComputed.flexBasis
 					local flexGrowAmount = (childFlexGrow / line.totalFlexGrowFactor) * lineRemainingFreeSpace
-					local availableWidth = isMainAxisRow and containerMainSize ~= nil and containerMainInnerSize or not isMainAxisRow and containerCrossSize ~= nil and containerCrossInnerSize
-					local availableHeight = isMainAxisRow and containerCrossSize ~= nil and containerCrossInnerSize or not isMainAxisRow and containerMainSize ~= nil and containerMainInnerSize
-					local forcedWidth = isMainAxisRow and (childComputedMainSize + flexGrowAmount) or nil
-					local forcedHeight = not isMainAxisRow and (childComputedMainSize + flexGrowAmount) or nil
-					calculateLayout(child, availableWidth, availableHeight, forcedWidth, forcedHeight, isMainAxisRow, stretchChildren)
+					forcedWidth = isMainAxisRow and (childComputedMainSize + flexGrowAmount) or nil
+					forcedHeight = not isMainAxisRow and (childComputedMainSize + flexGrowAmount) or nil
 				elseif childFlexShrink > 0 and lineRemainingFreeSpace < 0 then
-					child.dirty = true
 					local childComputed = child.computed
 					local childComputedMainSize = childComputed.flexBasis
 					local flexShrinkAmount = childComputedMainSize * (childFlexShrink / line.totalFlexShrinkScaledFactor) * -lineRemainingFreeSpace
-					local availableWidth = isMainAxisRow and containerMainSize ~= nil and containerMainInnerSize or not isMainAxisRow and containerCrossSize ~= nil and containerCrossInnerSize
-					local availableHeight = isMainAxisRow and containerCrossSize ~= nil and containerCrossInnerSize or not isMainAxisRow and containerMainSize ~= nil and containerMainInnerSize
-					local forcedWidth = isMainAxisRow and math.max(childComputedMainSize - flexShrinkAmount, 0) or nil
-					local forcedHeight = not isMainAxisRow and math.max(childComputedMainSize - flexShrinkAmount, 0) or nil
-					calculateLayout(child, availableWidth, availableHeight, forcedWidth, forcedHeight, isMainAxisRow, stretchChildren)
+					forcedWidth = isMainAxisRow and math.max(childComputedMainSize - flexShrinkAmount, 0) or nil
+					forcedHeight = not isMainAxisRow and math.max(childComputedMainSize - flexShrinkAmount, 0) or nil
 				end
+				calculateLayout(child, availableWidth, availableHeight, forcedWidth, forcedHeight, isMainAxisRow, stretchChildren)
 			end
 		end
 		local flexLinesAlignItemsOffset = alignItems == "center" and (containerCrossInnerSize - linesCrossTotalLinesSize) * 0.5 or alignItems == "flex-end" and containerCrossInnerSize - linesCrossTotalLinesSize or 0
@@ -879,7 +941,7 @@ function calculateLayout(node, availableWidth, availableHeight, forcedWidth, for
 		local measuredWidth
 		local measuredHeight
 		if node.measure then measuredWidth, measuredHeight = node:measure() end
-		if measuredWidth and not computedWidth and (resolvedWidth.unit == "auto" or resolvedHeight.unit == "fit-content") then computedWidth = measuredWidth + computedPaddingLeft + computedPaddingRight end
+		if measuredWidth and not computedWidth and (resolvedWidth.unit == "auto" or resolvedWidth.unit == "fit-content") then computedWidth = measuredWidth + computedPaddingLeft + computedPaddingRight end
 		if measuredHeight and not computedHeight and (resolvedHeight.unit == "auto" or resolvedHeight.unit == "fit-content") then computedHeight = measuredHeight + computedPaddingTop + computedPaddingBottom end
 	end
 	computed.width = math.floor((computedWidth or 0) + 0.5)
@@ -1130,14 +1192,14 @@ local function renderer(node, pX, pY, pColor)
 		end
 	end
 	if hasBackground then
-		if usingRectangleShader and isValidMaterial(renderBackgroundShader) then
+		if isValidMaterial(renderBackgroundShader) then
 			dxDrawImage(x, y, computedWidth, computedHeight, renderBackgroundShader, 0, 0, 0, backgroundColor)
 		else
 			dxDrawRectangle(x, y, computedWidth, computedHeight, backgroundColor)
 		end
 	end
 	if hasStroke then
-		if usingRectangleShader and isValidMaterial(renderStrokeShader) then
+		if isValidMaterial(renderStrokeShader) then
 			dxDrawImage(x, y, computedWidth, computedHeight, renderStrokeShader, 0, 0, 0, strokeColor)
 		else
 			dxDrawRectangle(x, y, renderStrokeLeftWeight, computedHeight, strokeColor)
@@ -1164,7 +1226,7 @@ local function getHoveredNode(cursorX, cursorY, node)
 	local renderHeight = render.height
 	local renderX = render.x
 	local renderY = render.y
-	local hovering = cursorX >= renderX and cursorY >= renderY and cursorX <= renderX + renderWidth and cursorY <= renderY + renderHeight
+	local hovering = attributes.hoverable and cursorX >= renderX and cursorY >= renderY and cursorX <= renderX + renderWidth and cursorY <= renderY + renderHeight
 	local states = node.states
 	if hovering and not states.hovered then
 		states.hovered = true
@@ -1252,15 +1314,6 @@ addEventHandler("onClientRender", root, function()
 end)
 
 Layta = {
-	Node = Node,
-	Text = Text,
-	Image = Image,
-	hex = hex,
-	hsl = hsl,
-	hue = hue,
-	transparent = transparent,
-	white = white,
-	black = black,
 	aliceblue = aliceblue,
 	antiquewhite = antiquewhite,
 	aqua = aqua,
@@ -1268,11 +1321,13 @@ Layta = {
 	azure = azure,
 	beige = beige,
 	bisque = bisque,
+	black = black,
 	blanchedalmond = blanchedalmond,
 	blue = blue,
 	blueviolet = blueviolet,
 	brown = brown,
 	burlywood = burlywood,
+	Button = Button,
 	cadetblue = cadetblue,
 	chartreuse = chartreuse,
 	chocolate = chocolate,
@@ -1307,14 +1362,19 @@ Layta = {
 	forestgreen = forestgreen,
 	fuchsia = fuchsia,
 	gainsboro = gainsboro,
+	getNodeFromId = getNodeFromId,
 	ghostwhite = ghostwhite,
 	gold = gold,
 	goldenrod = goldenrod,
 	gray = gray,
 	green = green,
 	greenyellow = greenyellow,
+	hex = hex,
 	honeydew = honeydew,
 	hotpink = hotpink,
+	hsl = hsl,
+	hue = hue,
+	Image = Image,
 	indianred = indianred,
 	indigo = indigo,
 	ivory = ivory,
@@ -1326,6 +1386,7 @@ Layta = {
 	lightblue = lightblue,
 	lightcoral = lightcoral,
 	lightcyan = lightcyan,
+	lighten = lighten,
 	lightgoldenrodyellow = lightgoldenrodyellow,
 	lightgray = lightgray,
 	lightgreen = lightgreen,
@@ -1356,6 +1417,7 @@ Layta = {
 	moccasin = moccasin,
 	navajowhite = navajowhite,
 	navy = navy,
+	Node = Node,
 	oldlace = oldlace,
 	olive = olive,
 	olivedrab = olivedrab,
@@ -1392,13 +1454,16 @@ Layta = {
 	steelblue = steelblue,
 	tan = tan,
 	teal = teal,
+	Text = Text,
 	thistle = thistle,
 	tomato = tomato,
+	transparent = transparent,
+	tree = tree,
 	turquoise = turquoise,
 	violet = violet,
 	wheat = wheat,
+	white = white,
 	whitesmoke = whitesmoke,
 	yellow = yellow,
 	yellowgreen = yellowgreen,
-	tree = tree,
 }
