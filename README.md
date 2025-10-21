@@ -1,4 +1,4 @@
-<img src="https://cdn.discordapp.com/attachments/1102451144070008863/1428594112759599174/layta-white.png?ex=68f31172&is=68f1bff2&hm=d777f4281467886d502c38df3639aa62b3c357ab5864e1fda3bc37c82a6025d4&" width="300" alt="Layta"/>
+<img src="https://github.com/TRtam/Layta/blob/main/layta-white.png" width="300" alt="Layta"/>
 
 # Layta
 <b>Layta</b> is a embeddable modern flexbox-based layout engine and graphical user-interface (GUI) framework for MTA:SA designed to simplify interface development. It provides a comprehensive toolkit for building responsive, visually consistent user interfaces with minimal complexity. <b>Layta</b> streamlines layout management and component design, empowering developers to create modern applications efficiently and elegantly.
