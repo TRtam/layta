@@ -173,6 +173,65 @@ local function isValidMaterial(material)
 	return true, type
 end
 
+
+local _dxDrawImage = dxDrawImage
+local _dxCreateRenderTarget = dxCreateRenderTarget
+local _dxSetRenderTarget = dxSetRenderTarget
+local _dxSetBlendMode = dxSetBlendMode
+local _dxGetBlendMode = dxGetBlendMode
+
+local dxCreatedRenderTargets = {}
+local dxCurrentRenderTarget
+
+local function dxCreateRenderTarget(width, height, alpha)
+	local dxRenderTarget = _dxCreateRenderTarget(width, height, alpha or true)
+	if dxRenderTarget then
+		dxSetTextureEdge(dxRenderTarget, "clamp")
+		dxCreatedRenderTargets[dxRenderTarget] = true
+	end
+	return dxRenderTarget
+end
+
+local function dxDestroyRenderTarget(dxRenderTarget)
+	if not dxCreatedRenderTargets[dxRenderTarget] then return false end
+	dxCreatedRenderTargets[dxRenderTarget] = nil
+	if isElement(dxRenderTarget) then destroyElement(dxRenderTarget) end
+	return true
+end
+
+local function dxSetRenderTarget(dxRenderTarget, clear)
+	local success = _dxSetRenderTarget(dxRenderTarget, clear)
+	if success then dxCurrentRenderTarget = dxRenderTarget end
+	return success
+end
+
+local function dxGetRenderTarget()
+	return dxCurrentRenderTarget
+end
+
+local dxCurrentBlendMode = "blend"
+
+local function dxSetBlendMode(dxBlendMode)
+	if dxBlendMode == dxCurrentBlendMode then return false end
+	local success = _dxSetBlendMode(dxBlendMode)
+	if success then dxCurrentBlendMode = dxBlendMode end
+	return success
+end
+
+local function dxGetBlendMode()
+	return dxCurrentBlendMode
+end
+
+local function dxDrawImage(x, y, width, height, material, ...)
+	local valid, type = isValidMaterial(material)
+	if not valid then return false end
+	local dxPreviousBlendMode = dxGetBlendMode()
+	if type == "shader" then dxSetBlendMode("blend") end
+	_dxDrawImage(x, y, width, height, material, ...)
+	dxSetBlendMode(dxPreviousBlendMode)
+	return true
+end
+
 local IDs = {}
 
 local function setNodeId(node, id)
@@ -879,64 +938,6 @@ local RectangleShaderString = [[
 	}
 ]]
 
-local _dxDrawImage = dxDrawImage
-local _dxCreateRenderTarget = dxCreateRenderTarget
-local _dxSetRenderTarget = dxSetRenderTarget
-local _dxSetBlendMode = dxSetBlendMode
-local _dxGetBlendMode = dxGetBlendMode
-
-local dxCreatedRenderTargets = {}
-local dxCurrentRenderTarget
-
-local function dxCreateRenderTarget(width, height, alpha)
-	local dxRenderTarget = _dxCreateRenderTarget(width, height, alpha or true)
-	if dxRenderTarget then
-		dxSetTextureEdge(dxRenderTarget, "clamp")
-		dxCreatedRenderTargets[dxRenderTarget] = true
-	end
-	return dxRenderTarget
-end
-
-local function dxDestroyRenderTarget(dxRenderTarget)
-	if not dxCreatedRenderTargets[dxRenderTarget] then return false end
-	dxCreatedRenderTargets[dxRenderTarget] = nil
-	if isElement(dxRenderTarget) then destroyElement(dxRenderTarget) end
-	return true
-end
-
-local function dxSetRenderTarget(dxRenderTarget, clear)
-	local success = _dxSetRenderTarget(dxRenderTarget, clear)
-	if success then dxCurrentRenderTarget = dxRenderTarget end
-	return success
-end
-
-local function dxGetRenderTarget()
-	return dxCurrentRenderTarget
-end
-
-local dxCurrentBlendMode = "blend"
-
-local function dxSetBlendMode(dxBlendMode)
-	if dxBlendMode == dxCurrentBlendMode then return false end
-	local success = _dxSetBlendMode(dxBlendMode)
-	if success then dxCurrentBlendMode = dxBlendMode end
-	return success
-end
-
-local function dxGetBlendMode()
-	return dxCurrentBlendMode
-end
-
-local function dxDrawImage(x, y, width, height, material, ...)
-	local valid, type = isValidMaterial(material)
-	if not valid then return false end
-	local dxPreviousBlendMode = dxGetBlendMode()
-	if type == "shader" then dxSetBlendMode("blend") end
-	_dxDrawImage(x, y, width, height, material, ...)
-	dxSetBlendMode(dxPreviousBlendMode)
-	return true
-end
-
 local function renderer(node, pVisualX, pVisualY, pRenderX, pRenderY, pColor)
 	local attributes = node.__attributes
 	if not attributes.visible then return false end
@@ -1172,7 +1173,7 @@ local tree = Node()
 local function getHoveredNode(cursorX, cursorY, node)
 	local attributes = node.__attributes
 	if not attributes.visible then return nil end
-	local hoveredNode
+	local topmost
 	local render = node.render
 	local renderWidth = render.width
 	local renderHeight = render.height
@@ -1180,7 +1181,8 @@ local function getHoveredNode(cursorX, cursorY, node)
 	local renderY = render.y
 	local hovering = attributes.hoverable and cursorX >= renderX and cursorY >= renderY and cursorX <= renderX + renderWidth and cursorY <= renderY + renderHeight
 	local renderTarget = render.target
-	if isValidMaterial(renderTarget) and not hovering then return nil end
+	local hasRenderTarget = isValidMaterial(renderTarget)
+	if hasRenderTarget and not hovering then return nil end
 	local states = node.states
 	if hovering and not states.hovered then
 		states.hovered = true
@@ -1198,16 +1200,16 @@ local function getHoveredNode(cursorX, cursorY, node)
 		local childRenderHeight = childRender.height
 		local childRenderX = childRender.x
 		local childRenderY = childRender.y
-		if childRenderX + childRenderWidth > 0 and childRenderY + childRenderHeight > 0 and childRenderX < screenWidth and childRenderY < screenHeight then
+		if childRenderX + childRenderWidth > 0 and childRenderY + childRenderHeight > 0 and childRenderX < screenWidth and childRenderY < screenHeight or hasRenderTarget and childRenderX + childRenderWidth > renderX and childRenderY + childRenderHeight > renderY and childRenderX < renderWidth and childRenderY < renderHeight then
 			local childAttributes = child.__attributes
 			if childAttributes.visible then
 				local hoveredChild = getHoveredNode(cursorX, cursorY, child)
-				if hoveredChild then hoveredNode = hoveredChild end
+				if hoveredChild then topmost = hoveredChild end
 			end
 		end
 	end
-	if hovering and not hoveredNode then hoveredNode = node end
-	return hoveredNode
+	if hovering and not topmost then topmost = node end
+	return topmost
 end
 
 local cursorHoveredNode
