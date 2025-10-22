@@ -361,6 +361,10 @@ local attributeAffectsLayout = {
 	width = true,
 }
 
+local attributeAffectsPaint = {
+
+}
+
 local Node = createClass()
 Node.__node__ = true
 
@@ -373,6 +377,7 @@ function Node:constructor(attributes, ...)
 	self.index = false
 	self.children = {}
 	self.dirty = true
+	self.paint = false
 	self.states = { hovered = false, clicked = false }
 	self.resolved = {
 		borderBottomLeftRadius = { value = 0, unit = "auto" },
@@ -411,6 +416,7 @@ function Node:constructor(attributes, ...)
 		borderTopRightRadius = "auto",
 		bottom = "auto",
 		clickable = true,
+		clipContent = false,
 		color = false,
 		display = "flex",
 		flexDirection = "row",
@@ -465,6 +471,7 @@ function Node:constructor(attributes, ...)
 			computed.materialHeight = materialHeight
 		end
 		if attributeAffectsLayout[key] then self:markDirty() end
+		self:invalidateRenderTarget()
 	end)
 	self.computed = {
 		bottom = 0,
@@ -488,6 +495,7 @@ function Node:constructor(attributes, ...)
 		borderTopLeftRadius = 0,
 		borderTopRightRadius = 0,
 		height = 0,
+		target = nil,
 		strokeBottomWeight = 0,
 		strokeLeftWeight = 0,
 		strokeRightWeight = 0,
@@ -552,7 +560,9 @@ function Node:appendChild(child)
 	child.parent = self
 	child.index = #self.children
 	child.dirty = true
+	child.paint = true
 	self:markDirty()
+	self:invalidateRenderTarget()
 	return true
 end
 
@@ -564,6 +574,7 @@ function Node:removeChild(child)
 	child.parent = false
 	child.index = false
 	self:markDirty()
+	self:invalidateRenderTarget()
 	return true
 end
 
@@ -578,6 +589,12 @@ function Node:markDirty()
 	if not self.dirty then self.dirty = true end
 	local parent = self.parent
 	if parent and not parent.dirty then parent:markDirty() end
+end
+
+function Node:invalidateRenderTarget()
+	if not self.paint then self.paint = true end
+	local parent = self.parent
+	if parent and not parent.paint then parent:invalidateRenderTarget() end
 end
 
 Text = createClass(Node)
@@ -628,9 +645,7 @@ Button = createClass(Node)
 Button.__button__ = true
 
 function Button:constructor(attributes, ...)
-	if attributes.hoverable ~= nil then
-		attributes.hoverable = false
-	end
+	if attributes.hoverable ~= nil then attributes.hoverable = false end
 	local childCount = select("#", ...)
 	for i = 1, childCount do
 		local child = select(i, ...)
@@ -1008,40 +1023,75 @@ local RectangleShaderString = [[
 ]]
 
 local _dxDrawImage = dxDrawImage
+local _dxCreateRenderTarget = dxCreateRenderTarget
+local _dxSetRenderTarget = dxSetRenderTarget
 local _dxSetBlendMode = dxSetBlendMode
 local _dxGetBlendMode = dxGetBlendMode
 
-local currentBlendMode = "blend"
+local dxCreatedRenderTargets = {}
+local dxCurrentRenderTarget
 
-local function dxSetBlendMode(blendMode)
-	if blendMode == currentBlendMode then return false end
-	local success = _dxSetBlendMode(blendMode)
-	if success then currentBlendMode = blendMode end
+local function dxCreateRenderTarget(width, height, alpha)
+	local dxRenderTarget = _dxCreateRenderTarget(width, height, alpha or true)
+	if dxRenderTarget then
+		dxSetTextureEdge(dxRenderTarget, "clamp")
+		dxCreatedRenderTargets[dxRenderTarget] = true
+	end
+	return dxRenderTarget
+end
+
+local function dxDestroyRenderTarget(dxRenderTarget)
+	if not dxCreatedRenderTargets[dxRenderTarget] then return false end
+	dxCreatedRenderTargets[dxRenderTarget] = nil
+	if isElement(dxRenderTarget) then destroyElement(dxRenderTarget) end
+	return true
+end
+
+local function dxSetRenderTarget(dxRenderTarget, clear)
+	local success = _dxSetRenderTarget(dxRenderTarget, clear)
+	if success then dxCurrentRenderTarget = dxRenderTarget end
+	return success
+end
+
+local function dxGetRenderTarget()
+	return dxCurrentRenderTarget
+end
+
+local dxCurrentBlendMode = "blend"
+
+local function dxSetBlendMode(dxBlendMode)
+	if dxBlendMode == dxCurrentBlendMode then return false end
+	local success = _dxSetBlendMode(dxBlendMode)
+	if success then dxCurrentBlendMode = dxBlendMode end
 	return success
 end
 
 local function dxGetBlendMode()
-	return blendMode
+	return dxCurrentBlendMode
 end
 
 local function dxDrawImage(x, y, width, height, material, ...)
 	local valid, type = isValidMaterial(material)
 	if not valid then return false end
-	local previousBlendMode = dxGetBlendMode()
+	local dxPreviousBlendMode = dxGetBlendMode()
 	if type == "shader" then dxSetBlendMode("blend") end
 	_dxDrawImage(x, y, width, height, material, ...)
-	dxSetBlendMode(previousBlendMode)
+	dxSetBlendMode(dxPreviousBlendMode)
 	return true
 end
 
-local function renderer(node, pX, pY, pColor)
+local function renderer(node, pVisualX, pVisualY, pRenderX, pRenderY, pColor)
 	local attributes = node.__attributes
 	if not attributes.visible then return false end
 	local computed = node.computed
 	local computedWidth = computed.width
 	local computedHeight = computed.height
-	local x = pX + computed.x
-	local y = pY + computed.y
+	local computedX = computed.x
+	local computedY = computed.y
+	local visualX = pVisualX + computedX
+	local visualY = pVisualY + computedY
+	local renderX = pRenderX + computedX
+	local renderY = pRenderY + computedY
 	local resolved = node.resolved
 	local resolvedBorderRadius = resolved.borderRadius
 	local resolvedBorderTopLeftRadius = resolved.borderTopLeftRadius
@@ -1114,8 +1164,33 @@ local function renderer(node, pX, pY, pColor)
 	local render = node.render
 	render.width = computedWidth
 	render.height = computedHeight
-	render.x = x
-	render.y = y
+	render.x = renderX
+	render.y = renderY
+	local renderTarget = render.target
+	local hasRenderTarget = isValidMaterial(renderTarget)
+	if attributes.clipContent then
+		if renderTarget == nil then
+			renderTarget = dxCreateRenderTarget(computedWidth, computedHeight, true)
+			hasRenderTarget = renderTarget ~= false
+			render.target = renderTarget
+			node.paint = true
+		end
+		if hasRenderTarget then
+			local renderTargetWidth, renderTargetHeight = dxGetMaterialSize(renderTarget)
+			if renderTargetWidth ~= computedWidth or renderTargetHeight ~= computedHeight then
+				dxDestroyRenderTarget(renderTarget)
+				renderTarget = dxCreateRenderTarget(computedWidth, computedHeight, true)
+				render.target = renderTarget
+				node.paint = true
+			end
+		end
+	elseif renderTarget ~= nil then
+		if hasRenderTarget then
+			dxDestroyRenderTarget(renderTarget)
+		end
+		renderTarget = nil
+		render.target = renderTarget
+	end
 	local renderBackgroundShader = render.backgroundShader
 	local hasBackground = getColorAlpha(backgroundColor) > 0
 	local renderStrokeShader = render.strokeShader
@@ -1193,25 +1268,45 @@ local function renderer(node, pX, pY, pColor)
 	end
 	if hasBackground then
 		if isValidMaterial(renderBackgroundShader) then
-			dxDrawImage(x, y, computedWidth, computedHeight, renderBackgroundShader, 0, 0, 0, backgroundColor)
+			dxDrawImage(visualX, visualY, computedWidth, computedHeight, renderBackgroundShader, 0, 0, 0, backgroundColor)
 		else
-			dxDrawRectangle(x, y, computedWidth, computedHeight, backgroundColor)
+			dxDrawRectangle(visualX, visualY, computedWidth, computedHeight, backgroundColor)
 		end
+	end
+	if hasRenderTarget then
+		if node.paint then
+			node.paint = false
+			local previousRenderTarget = dxGetRenderTarget()
+			dxSetRenderTarget(renderTarget, true)
+			local previousBlendMode = dxGetBlendMode()
+			local changedBlendMode = dxSetBlendMode("modulate_add")
+			if node.draw and getColorAlpha(color) > 0 then node:draw(0, 0, computedWidth, computedHeight, color) end
+			local children = node.children
+			local childCount = children and #children or 0
+			for i = 1, childCount do
+				renderer(children[i], 0, 0, renderX, renderY, color)
+			end
+			if changedBlendMode then dxSetBlendMode(previousBlendMode) end
+			dxSetRenderTarget(previousRenderTarget)
+		end
+		dxDrawImage(visualX, visualY, computedWidth, computedHeight, renderTarget)
 	end
 	if hasStroke then
 		if isValidMaterial(renderStrokeShader) then
-			dxDrawImage(x, y, computedWidth, computedHeight, renderStrokeShader, 0, 0, 0, strokeColor)
+			dxDrawImage(visualX, visualY, computedWidth, computedHeight, renderStrokeShader, 0, 0, 0, strokeColor)
 		else
-			dxDrawRectangle(x, y, renderStrokeLeftWeight, computedHeight, strokeColor)
-			dxDrawRectangle(x, y, computedWidth, renderStrokeTopWeight, strokeColor)
-			dxDrawRectangle(x + computedWidth - renderStrokeRightWeight, y, renderStrokeRightWeight, computedHeight, strokeColor)
-			dxDrawRectangle(x, y + computedHeight - renderStrokeBottomWeight, computedWidth, renderStrokeBottomWeight, strokeColor)
+			dxDrawRectangle(visualX, visualY, renderStrokeLeftWeight, computedHeight, strokeColor)
+			dxDrawRectangle(visualX, visualY, computedWidth, renderStrokeTopWeight, strokeColor)
+			dxDrawRectangle(visualX + computedWidth - renderStrokeRightWeight, visualY, renderStrokeRightWeight, computedHeight, strokeColor)
+			dxDrawRectangle(visualX, visualY + computedHeight - renderStrokeBottomWeight, computedWidth, renderStrokeBottomWeight, strokeColor)
 		end
 	end
-	if node.draw and getColorAlpha(color) > 0 then node:draw(x, y, computedWidth, computedHeight, color) end
-	local children = node.children
-	local childCount = children and #children or 0
-	for i = 1, childCount do renderer(children[i], x, y, color) end
+	if not isValidMaterial(renderTarget) then
+		if node.draw and getColorAlpha(color) > 0 then node:draw(visualX, visualY, computedWidth, computedHeight, color) end
+		local children = node.children
+		local childCount = children and #children or 0
+		for i = 1, childCount do renderer(children[i], visualX, visualY, renderX, renderY, color) end
+	end
 	return true
 end
 
@@ -1310,7 +1405,7 @@ addEventHandler("onClientRender", root, function()
 end)
 
 addEventHandler("onClientRender", root, function()
-	renderer(tree, 0, 0, white)
+	renderer(tree, 0, 0, 0, 0, white)
 end)
 
 Layta = {
