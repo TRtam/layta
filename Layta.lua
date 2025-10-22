@@ -1322,6 +1322,8 @@ local function getHoveredNode(cursorX, cursorY, node)
 	local renderX = render.x
 	local renderY = render.y
 	local hovering = attributes.hoverable and cursorX >= renderX and cursorY >= renderY and cursorX <= renderX + renderWidth and cursorY <= renderY + renderHeight
+	local renderTarget = render.target
+	if isValidMaterial(renderTarget) and not hovering then return nil end
 	local states = node.states
 	if hovering and not states.hovered then
 		states.hovered = true
@@ -1334,10 +1336,17 @@ local function getHoveredNode(cursorX, cursorY, node)
 	local childCount = #children
 	for i = 1, childCount do
 		local child = children[i]
-		local childAttributes = child.__attributes
-		if childAttributes.visible then
-			local hoveredChild = getHoveredNode(cursorX, cursorY, child)
-			if hoveredChild then hoveredNode = hoveredChild end
+		local childRender = child.render
+		local childRenderWidth = childRender.width
+		local childRenderHeight = childRender.height
+		local childRenderX = childRender.x
+		local childRenderY = childRender.y
+		if childRenderX + childRenderWidth > 0 and childRenderY + childRenderHeight > 0 and childRenderX < screenWidth and childRenderY < screenHeight then
+			local childAttributes = child.__attributes
+			if childAttributes.visible then
+				local hoveredChild = getHoveredNode(cursorX, cursorY, child)
+				if hoveredChild then hoveredNode = hoveredChild end
+			end
 		end
 	end
 	if hovering and not hoveredNode then hoveredNode = node end
