@@ -27,6 +27,8 @@ Adding <b>Layta</b> to your project :
 ### Your first UI
 Here's how simple it is to get started:
 ```lua
+loadstring(exports.Layta:import())()
+
 local ui = Layta.Node({
     flexDirection = "column",
     justifyContent = "center",
