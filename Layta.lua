@@ -16,6 +16,11 @@ local isElement = isElement
 local destroyElement = destroyElement
 local getElementType = getElementType
 
+local dxGetTextWidth = dxGetTextWidth
+local dxGetTextSize = dxGetTextSize
+local dxGetFontHeight = dxGetFontHeight
+local dxGetMaterialSize = dxGetMaterialSize
+
 --
 -- Enums
 --
@@ -290,6 +295,165 @@ local function dxDrawImage(x, y, width, height, material, rotation, rotationCent
 end
 
 --
+-- Event
+--
+
+local Event = createClass()
+
+function Event:constructor(name, options)
+	if type(options) ~= "table" then
+		options = { bubbles = false, cancelable = false }
+	end
+
+	self.name = name
+	self.bubbles = type(options.bubbles) == "boolean" and options.bubbles or false
+	self.cancelable = type(options.cancelable) == "boolean" and options.cancelable or false
+	self.defaultPrevented = false
+	self.propagationStopped = false
+	self.immediatePropagationStopped = false
+	self.target = false
+	self.currentTarget = false
+	self.eventPhase = 0
+	self.timestamp = getRealTime().timestamp
+	self.tick = getTickCount()
+end
+
+function Event:preventDefault()
+	if self.cancelable then
+		self.defaultPrevented = true
+	end
+end
+
+function Event:stopPropagation()
+	self.propagationStopped = true
+end
+
+function Event:stopImmediatePropagation()
+	self.immediatePropagationStopped = true
+end
+
+function Event:getComposedPath()
+	local composedPath = {}
+
+	local target = self.target
+	while target do
+		table.insert(composedPath, target)
+		target = target.parent
+	end
+
+	return composedPath
+end
+
+--
+-- EventTarget
+--
+
+local EventTarget = createClass()
+
+function EventTarget:constructor()
+	self.eventListeners = {}
+end
+
+function EventTarget:addEventListener(name, listener, options)
+	if type(options) ~= "table" then
+		options = { capture = false }
+	end
+
+	if not self.eventListeners[name] then
+		self.eventListeners[name] = {}
+	end
+
+	table.insert(self.eventListeners[name], 1, { listener = listener, capture = type(options.capture) == "boolean" and options.capture or false })
+
+	return true
+end
+
+function EventTarget:removeEventListener(name, listener, options)
+	if type(options) ~= "table" then
+		options = { capture = false }
+	end
+
+	local eventListeners = self.eventListeners[name]
+
+	if not eventListeners then
+		return false
+	end
+
+	for i = #eventListeners, 1, -1 do
+		local eventListener = eventListeners[i]
+
+		if eventListener.listener == listener and (eventListener.capture == (type(options.capture) == "boolean" and options.capture or false)) then
+			table.remove(eventListeners, i)
+			return true
+		end
+	end
+
+	return false
+end
+
+function EventTarget:invokeListeners(target, event, capture)
+	if type(capture) ~= "boolean" then
+		capture = false
+	end
+
+	local eventListeners = target.eventListeners[event.name]
+
+	if not eventListeners then
+		return
+	end
+
+	for i = 1, #eventListeners do
+		local eventListener = eventListeners[i]
+
+		if not event.immediatePropagationStopped and eventListener.capture == capture then
+			eventListener.listener(event)
+		end
+	end
+end
+
+function EventTarget:dispatchEvent(event)
+	event.target = self
+
+	local composedPath = event:getComposedPath()
+	event.eventPhase = 1
+
+	for i = #composedPath, 1, -1 do
+		if event.propagationStopped then
+			return not event.defaultPrevented
+		end
+
+		local target = composedPath[i]
+		event.currentTarget = target
+
+		self:invokeListeners(target, event, true)
+	end
+
+	event.eventPhase = 2
+
+	if not event.propagationStopped then
+		event.currentTarget = self
+		self:invokeListeners(self, event, false)
+	end
+
+	if event.bubbles and not event.propagationStopped then
+		event.eventPhase = 3
+
+		for i = 2, #composedPath do
+			if event.propagationStopped then
+				break
+			end
+
+			local target = composedPath[i]
+			event.currentTarget = target
+
+			self:invokeListeners(target, event, false)
+		end
+	end
+
+	return not event.defaultPrevented
+end
+
+--
 -- Basic Id. system
 --
 
@@ -313,7 +477,7 @@ end
 -- Node
 --
 
-Node = createClass()
+Node = createClass(EventTarget)
 Node.__node__ = true
 
 local function isNode(node)
@@ -321,6 +485,8 @@ local function isNode(node)
 end
 
 function Node:constructor(attributes, ...)
+	EventTarget.constructor(self)
+
 	if type(attributes) ~= "table" then
 		attributes = {}
 	end
@@ -527,6 +693,21 @@ function Node:constructor(attributes, ...)
 
 	for i = 1, select("#", ...) do
 		self:appendChild(select(i, ...))
+	end
+end
+
+function Node:destructor(...)
+	local children = self.children
+	local childCount = #children
+
+	for i = childCount, 1, -1 do
+		children[i]:destroy(...)
+	end
+
+	local parent = self.parent
+
+	if parent then
+		parent:removeChild(self)
 	end
 end
 
