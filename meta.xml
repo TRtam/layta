@@ -1,0 +1,19 @@
+<meta>
+  <script src="layta.lua" type="client" />
+  <script src="bundler.lua" type="client" />
+  <export function="import" type="client" />
+
+  <!-- <script src="constants.lua" type="client" />
+  <script src="utilities.lua" type="client" />
+  <script src="compute-layout.lua" type="client" />
+  <script src="renderer.lua" type="client" />
+  <script src="cursor.lua" type="client" />
+  <script src="node.lua" type="client" />
+  <script src="text.lua" type="client" />
+  <script src="image.lua" type="client" />
+  <script src="tree.lua" type="client" />
+  <script src="bundler.lua" type="client" />
+
+
+  <file src="rectangle.hlsl" /> -->
+</meta>

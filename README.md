@@ -8,30 +8,19 @@ Since I began developing scripts for MTA:SA, I've created numerous user interfac
 
 ## Getting Started
 ### Installation
-Adding <b>Layta</b> to your project:
-1. Download `Layta.lua` from the repository.
+Adding <b>Layta</b> to your project :
+1. Download the repo.
 
-2. Place it in your resource folder, for example:
-
-    ```
-    my_resource/
-    ├── meta.xml
-    ├── client.lua
-    └── Layta.lua
-    ```
+2. Place Layta's resource to your resources folder.
   
-3. Add it to the resource's meta.xml:
+3. Go to your console and type start layta.
 
-    ```xml
-    <meta>
-      ...
-      <script src="Layta.lua" type="client"/>
-    </meta>
-    ```
-
-4. Now you can access <b>Layta</b>'s API directly:
+4. Import layta into your script like so:
 
     ```lua
+    loadstring(exports.Layta:import())()
+
+    -- Now you can acesss to Layta's API
     Layta.Node({width = 100, height = 100})
     ```
 
@@ -47,7 +36,7 @@ local ui = Layta.Node({
     backgroundColor = 0xAA000000,
     borderRadius = 8,
   },
-  Layta.Text({ text = "Hello, World!", })
+  Layta.Text({ value = "Hello, World!", })
 )
 
 -- Add it to the Layta tree
