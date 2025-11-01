@@ -1,6 +1,6 @@
 <picture>
-  <source srcset="layta-black.png" media="(prefers-color-scheme: dark)">
-  <img src="layta-white.png" alt="My image">
+  <source srcset="layta-white.png" media="(prefers-color-scheme: dark)">
+  <img src="layta-black.png" alt="My image">
 </picture>
 
 # Disclaimer
