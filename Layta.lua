@@ -1086,7 +1086,7 @@ function Input:getCaretIndexByCursor(cursorX)
 	local alignX = self.alignX
 
 	local textWidth = self.computedTextWidth
-	local textX = alignX == AlignX.Right and self.width - textWidth or alignX == AlignX.Center and (self.width - textWidth) * 0.5 or 0
+	local textX = alignX == AlignX.Right and self.renderWidth - textWidth or alignX == AlignX.Center and (self.renderWidth - textWidth) * 0.5 or 0
 
 	cursorX = cursorX - self.renderX - textX - self.viewScroll
 
@@ -1350,6 +1350,7 @@ function splitChildren(
 
 	local secondPassItems
 	local thirdPassItems
+	local absoluteItems
 
 	local hasPrevSiblingVisible = false
 
@@ -1358,6 +1359,23 @@ function splitChildren(
 
 		while true do
 			if not child.visible then
+				break
+			end
+
+			if child.position == Position.Absolute then
+				local childAvailableWidth = isMainAxisRow and containerMainSize or not isMainAxisRow and containerCrossSize or nil
+				local childAvailableHeight = isMainAxisRow and containerCrossSize or not isMainAxisRow and containerMainSize or nil
+
+				calculateLayout(child, childAvailableWidth, childAvailableHeight, isMainAxisRow, stretchItems)
+
+				if not doingSecondPass then
+					if not absoluteItems then
+						absoluteItems = {}
+					end
+
+					table.insert(absoluteItems, child)
+				end
+
 				break
 			end
 
@@ -1532,6 +1550,38 @@ function calculateLayout(node, availableWidth, availableHeight, parentIsMainAxis
 
 	node.layoutDirty = false
 
+	if node.resolvedLeftUnit == Unit.Auto then
+		node.computedLeft = 0
+	elseif node.resolvedLeftUnit == Unit.Pixel then
+		node.computedLeft = node.resolvedLeftValue
+	elseif node.resolvedLeftUnit == Unit.Percentage then
+		node.computedLeft = node.resolvedLeftValue * (availableWidth or 0)
+	end
+
+	if node.resolvedTopUnit == Unit.Auto then
+		node.computedTop = 0
+	elseif node.resolvedTopUnit == Unit.Pixel then
+		node.computedTop = node.resolvedTopValue
+	elseif node.resolvedTopUnit == Unit.Percentage then
+		node.computedTop = node.resolvedTopValue * (availableWidth or 0)
+	end
+
+	if node.resolvedRightUnit == Unit.Auto then
+		node.computedRight = 0
+	elseif node.resolvedRightUnit == Unit.Pixel then
+		node.computedRight = node.resolvedRightValue
+	elseif node.resolvedRightUnit == Unit.Percentage then
+		node.computedRight = node.resolvedRightValue * (availableWidth or 0)
+	end
+
+	if node.resolvedBottomUnit == Unit.Auto then
+		node.computedBottom = 0
+	elseif node.resolvedBottomUnit == Unit.Pixel then
+		node.computedBottom = node.resolvedBottomValue
+	elseif node.resolvedBottomUnit == Unit.Percentage then
+		node.computedBottom = node.resolvedBottomValue * (availableWidth or 0)
+	end
+
 	local flexDirection = node.flexDirection
 	local isMainAxisRow = flexDirection == FlexDirection.Row
 
@@ -1541,48 +1591,34 @@ function calculateLayout(node, availableWidth, availableHeight, parentIsMainAxis
 	local crossAxisDimension = isMainAxisRow and "computedHeight" or "computedWidth"
 	local crossAxisPosition = isMainAxisRow and "computedY" or "computedX"
 
-	if
-		node.strokeWeight ~= node.previousStrokeWeight
-		or node.strokeLeftWeight ~= node.previousStrokeLeftWeight
-		or node.strokeTopWeight ~= node.previousStrokeTopWeight
-		or node.strokeRightWeight ~= node.previousStrokeRightWeight
-		or node.strokeBottomWeight ~= node.previousStrokeBottomWeight
-	then
-		node.previousStrokeWeight = node.strokeWeight
-		node.previousStrokeLeftWeight = node.strokeLeftWeight
-		node.previousStrokeTopWeight = node.strokeTopWeight
-		node.previousStrokeRightWeight = node.strokeRightWeight
-		node.previousStrokeBottomWeight = node.strokeBottomWeight
+	if node.resolvedStrokeWeightUnit == Unit.Auto then
+		local computedStrokeWeight = 0
+		node.computedStrokeLeftWeight = computedStrokeWeight
+		node.computedStrokeTopWeight = computedStrokeWeight
+		node.computedStrokeRightWeight = computedStrokeWeight
+		node.computedStrokeBottomWeight = computedStrokeWeight
+	elseif node.resolvedStrokeWeightUnit == Unit.Pixel then
+		local computedStrokeWeight = node.resolvedStrokeWeightValue
+		node.computedStrokeLeftWeight = computedStrokeWeight
+		node.computedStrokeTopWeight = computedStrokeWeight
+		node.computedStrokeRightWeight = computedStrokeWeight
+		node.computedStrokeBottomWeight = computedStrokeWeight
+	end
 
-		if node.resolvedStrokeWeightUnit == Unit.Auto then
-			local computedStrokeWeight = 0
-			node.computedStrokeLeftWeight = computedStrokeWeight
-			node.computedStrokeTopWeight = computedStrokeWeight
-			node.computedStrokeRightWeight = computedStrokeWeight
-			node.computedStrokeBottomWeight = computedStrokeWeight
-		elseif node.resolvedStrokeWeightUnit == Unit.Pixel then
-			local computedStrokeWeight = node.resolvedStrokeWeightValue
-			node.computedStrokeLeftWeight = computedStrokeWeight
-			node.computedStrokeTopWeight = computedStrokeWeight
-			node.computedStrokeRightWeight = computedStrokeWeight
-			node.computedStrokeBottomWeight = computedStrokeWeight
-		end
+	if node.resolvedStrokeLeftWeightUnit == Unit.Pixel then
+		node.computedStrokeLeftWeight = node.resolvedStrokeLeftWeightValue
+	end
 
-		if node.resolvedStrokeLeftWeightUnit == Unit.Pixel then
-			node.computedStrokeLeftWeight = node.resolvedStrokeLeftWeightValue
-		end
+	if node.resolvedStrokeTopWeightUnit == Unit.Pixel then
+		node.computedStrokeTopWeight = node.resolvedStrokeTopWeightValue
+	end
 
-		if node.resolvedStrokeTopWeightUnit == Unit.Pixel then
-			node.computedStrokeTopWeight = node.resolvedStrokeTopWeightValue
-		end
+	if node.resolvedStrokeRightWeightUnit == Unit.Pixel then
+		node.computedStrokeRightWeight = node.resolvedStrokeRightWeightValue
+	end
 
-		if node.resolvedStrokeRightWeightUnit == Unit.Pixel then
-			node.computedStrokeRightWeight = node.resolvedStrokeRightWeightValue
-		end
-
-		if node.resolvedStrokeBottomWeightUnit == Unit.Pixel then
-			node.computedStrokeBottomWeight = node.resolvedStrokeBottomWeightValue
-		end
+	if node.resolvedStrokeBottomWeightUnit == Unit.Pixel then
+		node.computedStrokeBottomWeight = node.resolvedStrokeBottomWeightValue
 	end
 
 	local computedStrokeLeftWeight = node.computedStrokeLeftWeight
@@ -1596,48 +1632,34 @@ function calculateLayout(node, availableWidth, availableHeight, parentIsMainAxis
 	local strokeWeightCrossStart = isMainAxisRow and computedStrokeTopWeight or computedStrokeLeftWeight
 	local strokeWeightCrossEnd = isMainAxisRow and computedStrokeBottomWeight or computedStrokeRightWeight
 
-	if
-		node.padding ~= node.previousPadding
-		or node.paddingLeft ~= node.previousPaddingLeft
-		or node.paddingTop ~= node.previousPaddingTop
-		or node.paddingRight ~= node.previousPaddingRight
-		or node.paddingBottom ~= node.previousPaddingBottom
-	then
-		node.previousPadding = node.padding
-		node.previousPaddingLeft = node.paddingLeft
-		node.previousPaddingTop = node.paddingTop
-		node.previousPaddingRight = node.paddingRight
-		node.previousPaddingBottom = node.paddingBottom
+	if node.resolvedPaddingUnit == Unit.Auto then
+		local computedPadding = 0
+		node.computedPaddingLeft = computedPadding
+		node.computedPaddingTop = computedPadding
+		node.computedPaddingRight = computedPadding
+		node.computedPaddingBottom = computedPadding
+	elseif node.resolvedPaddingUnit == Unit.Pixel then
+		local computedPadding = node.resolvedPaddingValue
+		node.computedPaddingLeft = computedPadding
+		node.computedPaddingTop = computedPadding
+		node.computedPaddingRight = computedPadding
+		node.computedPaddingBottom = computedPadding
+	end
 
-		if node.resolvedPaddingUnit == Unit.Auto then
-			local computedPadding = 0
-			node.computedPaddingLeft = computedPadding
-			node.computedPaddingTop = computedPadding
-			node.computedPaddingRight = computedPadding
-			node.computedPaddingBottom = computedPadding
-		elseif node.resolvedPaddingUnit == Unit.Pixel then
-			local computedPadding = node.resolvedPaddingValue
-			node.computedPaddingLeft = computedPadding
-			node.computedPaddingTop = computedPadding
-			node.computedPaddingRight = computedPadding
-			node.computedPaddingBottom = computedPadding
-		end
+	if node.resolvedPaddingLeftUnit == Unit.Pixel then
+		node.computedPaddingLeft = node.resolvedPaddingLeftValue
+	end
 
-		if node.resolvedPaddingLeftUnit == Unit.Pixel then
-			node.computedPaddingLeft = node.resolvedPaddingLeftValue
-		end
+	if node.resolvedPaddingTopUnit == Unit.Pixel then
+		node.computedPaddingTop = node.resolvedPaddingTopValue
+	end
 
-		if node.resolvedPaddingTopUnit == Unit.Pixel then
-			node.computedPaddingTop = node.resolvedPaddingTopValue
-		end
+	if node.resolvedPaddingRightUnit == Unit.Pixel then
+		node.computedPaddingRight = node.resolvedPaddingRightValue
+	end
 
-		if node.resolvedPaddingRightUnit == Unit.Pixel then
-			node.computedPaddingRight = node.resolvedPaddingRightValue
-		end
-
-		if node.resolvedPaddingBottomUnit == Unit.Pixel then
-			node.computedPaddingBottom = node.resolvedPaddingBottomValue
-		end
+	if node.resolvedPaddingBottomUnit == Unit.Pixel then
+		node.computedPaddingBottom = node.resolvedPaddingBottomValue
 	end
 
 	local computedPaddingLeft = node.computedPaddingLeft
@@ -1728,28 +1750,22 @@ function calculateLayout(node, availableWidth, availableHeight, parentIsMainAxis
 		local alignItems = node.alignItems
 		local stretchItems = alignItems == AlignItems.Stretch
 
-		if node.gap ~= node.previousGap or node.columnGap ~= node.previousColumnGap or node.rowGap ~= node.previousRowGap then
-			node.previousGap = node.gap
-			node.previousColumnGap = node.columnGap
-			node.previousRowGap = node.rowGap
+		if node.resolvedGapUnit == Unit.Auto then
+			local computedGap = 0
+			node.computedColumnGap = computedGap
+			node.computedRowGap = computedGap
+		elseif node.resolvedGapUnit == Unit.Pixel then
+			local computedGap = node.resolvedGapValue
+			node.computedColumnGap = computedGap
+			node.computedRowGap = computedGap
+		end
 
-			if node.resolvedGapUnit == Unit.Auto then
-				local computedGap = 0
-				node.computedColumnGap = computedGap
-				node.computedRowGap = computedGap
-			elseif node.resolvedGapUnit == Unit.Pixel then
-				local computedGap = node.resolvedGapValue
-				node.computedColumnGap = computedGap
-				node.computedRowGap = computedGap
-			end
+		if node.resolvedColumnGapUnit == Unit.Pixel then
+			node.computedColumnGap = node.resolvedColumnGapValue
+		end
 
-			if node.resolvedColumnGapUnit == Unit.Pixel then
-				node.computedColumnGap = node.resolvedColumnGapValue
-			end
-
-			if node.resolvedRowGapUnit == Unit.Pixel then
-				node.computedRowGap = node.resolvedRowGapValue
-			end
+		if node.resolvedRowGapUnit == Unit.Pixel then
+			node.computedRowGap = node.resolvedRowGapValue
 		end
 
 		local computedColumnGap = node.computedColumnGap
@@ -1758,7 +1774,7 @@ function calculateLayout(node, availableWidth, availableHeight, parentIsMainAxis
 		local gapMain = isMainAxisRow and computedColumnGap or computedRowGap
 		local gapCross = isMainAxisRow and computedRowGap or computedColumnGap
 
-		local lines, mainMaxLineSize, crossTotalLinesSize, secondPassItems, thirdPassItems = splitChildren(
+		local lines, mainMaxLineSize, crossTotalLinesSize, secondPassItems, thirdPassItems, absoluteItems = splitChildren(
 			isMainAxisRow,
 			mainAxisDimension,
 			mainAxisPosition,
@@ -2051,13 +2067,74 @@ function calculateLayout(node, availableWidth, availableHeight, parentIsMainAxis
 						or 0
 					)
 
-				childMainPosition = math_floor(childMainPosition + 0.5)
-				childCrossPosition = math_floor(childCrossPosition + 0.5)
+				local childComputedWidth = isMainAxisRow and childComputedMainSize or childComputedCrossSize
+				local childComputedHeight = isMainAxisRow and childComputedCrossSize or childComputedMainSize
 
-				child[mainAxisPosition] = childMainPosition
-				child[crossAxisPosition] = childCrossPosition
+				local childComputedX = isMainAxisRow and childMainPosition or childCrossPosition
+				local childComputedY = isMainAxisRow and childCrossPosition or childMainPosition
+
+				local hasLeft = child.resolvedLeftUnit ~= Unit.Auto
+				local hasRight = child.resolvedRightUnit ~= Unit.Auto
+
+				local hasTop = child.resolvedTopUnit ~= Unit.Auto
+				local hasBottom = child.resolvedBottomUnit ~= Unit.Auto
+
+				if (hasLeft and hasRight) or hasLeft then
+					childComputedX = childComputedX + child.computedLeft
+				elseif hasRight then
+					childComputedX = childComputedX - child.computedRight
+				end
+
+				if (hasTop and hasBottom) or hasTop then
+					childComputedY = childComputedY + child.computedTop
+				elseif hasBottom then
+					childComputedY = childComputedY - child.computedBottom
+				end
+
+				childComputedX = math_floor(childComputedX + 0.5)
+				childComputedY = math_floor(childComputedY + 0.5)
+
+				child.computedX = childComputedX
+				child.computedY = childComputedY
 
 				caretMainPosition = caretMainPosition + childComputedMainSize + gapMain + lineJustifyContentGap
+			end
+		end
+
+		if absoluteItems then
+			for i = 1, #absoluteItems do
+				local child = absoluteItems[i]
+
+				local childComputedWidth = child.computedWidth
+				local childComputedHeight = child.computedHeight
+
+				local childComputedX = justifyContent == JustifyContent.FlexEnd and computedWidth - childComputedWidth
+					or justifyContent == JustifyContent.Center and (computedWidth - childComputedWidth) * 0.5
+					or 0
+				local childComputedY = alignItems == AlignItems.FlexEnd and computedHeight - childComputedHeight
+					or alignItems == AlignItems.Center and (computedHeight - childComputedHeight) * 0.5
+					or 0
+
+				local hasLeft = child.resolvedLeftUnit ~= Unit.Auto
+				local hasRight = child.resolvedRightUnit ~= Unit.Auto
+
+				local hasTop = child.resolvedTopUnit ~= Unit.Auto
+				local hasBottom = child.resolvedBottomUnit ~= Unit.Auto
+
+				if (hasLeft and hasRight) or hasLeft then
+					childComputedX = child.computedLeft
+				elseif hasRight then
+					childComputedX = computedWidth - childComputedWidth - child.computedRight
+				end
+
+				if (hasTop and hasBottom) or hasTop then
+					childComputedY = child.computedTop
+				elseif hasBottom then
+					childComputedY = computedHeight - childComputedHeight - child.computedBottom
+				end
+
+				child.computedX = math.floor(childComputedX + 0.5)
+				child.computedY = math.floor(childComputedY + 0.5)
 			end
 		end
 	end
@@ -2708,24 +2785,24 @@ local function getHoveredNode(node)
 	for i = childcount, 1, -1 do
 		local child = children[i]
 
-		local childComputedWidth = child.computedWidth
-		local childComputedHeight = child.computedHeight
+		-- local childComputedWidth = child.computedWidth
+		-- local childComputedHeight = child.computedHeight
 
-		local childComputedX = child.computedX + scrollLeft
-		local childComputedY = child.computedY + scrollTop
+		-- local childComputedX = child.computedX + scrollLeft
+		-- local childComputedY = child.computedY + scrollTop
 
-		if
-			childComputedX + childComputedWidth > 0
-			and childComputedY + childComputedHeight > 0
-			and childComputedX < computedWidth
-			and childComputedY < computedHeight
-		then
-			local hoveredChild, hoveringHorizontalScrollbar, hoveringVerticalScrollbar = getHoveredNode(child)
+		-- if
+		-- 	childComputedX + childComputedWidth > 0
+		-- 	and childComputedY + childComputedHeight > 0
+		-- 	and childComputedX < computedWidth
+		-- 	and childComputedY < computedHeight
+		-- then
+		local hoveredChild, hoveringHorizontalScrollbar, hoveringVerticalScrollbar = getHoveredNode(child)
 
-			if hoveredChild then
-				return hoveredChild, hoveringHorizontalScrollbar, hoveringVerticalScrollbar
-			end
+		if hoveredChild then
+			return hoveredChild, hoveringHorizontalScrollbar, hoveringVerticalScrollbar
 		end
+		-- end
 	end
 
 	if not hovered then
@@ -2940,7 +3017,7 @@ end
 -- Tree
 --
 
-tree = Node()
+tree = Node({ width = SCREEN_WIDTH, height = SCREEN_HEIGHT })
 
 --
 -- Initializer / Finalizer
