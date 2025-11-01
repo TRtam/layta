@@ -88,8 +88,20 @@ local MaterialType = {
 local BlendMode = {
 	Blend = "blend",
 	Add = "add",
-	ModulateAdd = "modulateAdd",
+	ModulateAdd = "modulate_add",
 	Overwrite = "overwrite",
+}
+
+local AlignX = {
+	Left = "left",
+	Center = "center",
+	Right = "right",
+}
+
+local AlignY = {
+	Top = "top",
+	Center = "center",
+	Bottom = "bottom",
 }
 
 --
@@ -822,7 +834,7 @@ function Node:setVisible(visible)
 end
 
 function Node:setId(id)
-	if id ~= false or (type(id) ~= "boolean" or utf8_len(id) == 0) then
+	if id ~= false or (type(id) ~= "string" or utf8_len(id) == 0) then
 		return false
 	end
 
@@ -834,6 +846,24 @@ function Node:setId(id)
 
 		IDs[self] = nil
 		IDs[id] = nil
+	end
+
+	return true
+end
+
+function Node:setFocused(focused)
+	if type(focused) ~= "boolean" then
+		return false
+	end
+
+	if focused == self.focused then
+		return false
+	end
+
+	self.focused = focused
+
+	if self.__input__ then
+		self:markViewDirty()
 	end
 
 	return true
@@ -851,7 +881,7 @@ function Text:constructor(attributes)
 		attributes = {}
 	end
 
-	self.value = attributes.value or ""
+	self.text = attributes.text or ""
 
 	self.textSize = attributes.textSize or 1
 	self.font = attributes.font or "default"
@@ -873,7 +903,7 @@ function Text:measure(availableWidth, availableHeight)
 	local textSize = self.textSize
 	local font = self.font
 
-	local textWidth, textHeight = dxGetTextSize(self.value, availableWidth or 0, textSize, font, self.wordWrap, self.colorCoded)
+	local textWidth, textHeight = dxGetTextSize(self.text, availableWidth or 0, textSize, font, self.wordWrap, self.colorCoded)
 	textHeight = math_max(textHeight, dxGetFontHeight(textSize, font))
 
 	self.computedTextWidth = textWidth
@@ -883,13 +913,13 @@ function Text:measure(availableWidth, availableHeight)
 end
 
 function Text:draw(x, y, width, height, color)
-	local value = self.value
+	local text = self.text
 
-	if utf8_len(value) == 0 then
+	if utf8_len(text) == 0 then
 		return
 	end
 
-	dxDrawText(value, x, y, x + width, y + height, color, self.textSize, self.font, self.alignX, self.alignY, self.clip, self.wordWrap, false, self.colorCoded)
+	dxDrawText(text, x, y, x + width, y + height, color, self.textSize, self.font, self.alignX, self.alignY, self.clip, self.wordWrap, false, self.colorCoded)
 end
 
 --
@@ -946,18 +976,40 @@ Input.__input__ = true
 
 function Input:constructor(attributes)
 	if type(attributes) ~= "table" then
-		attributes = { backgroundColor = WHITE, foregroundColor = BLACK }
+		attributes = {}
+	end
+
+	if attributes.backgroundColor == nil then
+		attributes.backgroundColor = WHITE
+	end
+
+	if attributes.foregroundColor == nil then
+		attributes.foregroundColor = BLACK
+	end
+
+	if attributes.padding == nil then
+		attributes.padding = 2
 	end
 
 	attributes.focusable = true
 
-	self.caretPosition = 0
+	self.viewWidth = 0
+	self.viewHeight = 0
+
+	self.viewScroll = 0
+	self.updateViewScroll = false
+
+	self.caretIndex = 0
+	self.selectIndex = 0
+
+	self.textToCaretWidth = 0
+
 	self.caretWidth = attributes.caretWidth or 1
 	self.caretColor = attributes.caretColor or BLACK
 
-	self.value = ""
-	self.valueLength = 0
-	self:setValue(attributes.value)
+	self.text = ""
+	self.textLength = 0
+	self:setText(attributes.text)
 
 	self.textSize = attributes.textSize or 1
 	self.font = attributes.font or "default"
@@ -971,22 +1023,64 @@ function Input:constructor(attributes)
 	Node.constructor(self, attributes)
 end
 
-function Input:setValue(value)
-	if type(value) ~= "string" then
+function Input:setCaretIndex(caretIndex, selecting)
+	if type(caretIndex) ~= "number" then
 		return false
 	end
 
-	if value == self.value then
-		return false
+	if type(selection) ~= "boolean" then
+		selecting = false
 	end
 
-	self.value = value
-	self.valueLength = utf8_len(value)
+	local text = self.text
+	local textLength = self.textLength
 
-	self.caretPosition = self.valueLength
+	self.caretIndex = math_max(0, math_min(caretIndex, textLength))
 
-	self:markLayoutDirty()
+	if not selecting then
+		self.selectIndex = self.caretIndex
+	end
+
+	self.updateViewScroll = true
+	self:markViewDirty()
 	self:markCanvasDirty()
+
+	return true
+end
+
+function Input:moveCaretIndex(amount, selecting)
+	if type(amount) ~= "number" then
+		return false
+	end
+
+	if type(selection) ~= "boolean" then
+		selecting = false
+	end
+
+	local caretIndex = self.caretIndex
+
+	if not selecting and caretIndex ~= self.selectIndex then
+		self:setCaretIndex(amount > 0 and math_max(caretIndex, self.selectIndex) or math_min(caretIndex, self.selectIndex))
+	else
+		self:setCaretIndex(caretIndex + amount, selecting)
+	end
+
+	return true
+end
+
+function Input:setText(text)
+	if type(text) ~= "string" then
+		return false
+	end
+
+	if text == self.text then
+		return false
+	end
+
+	self.text = text
+	self.textLength = utf8_len(text)
+
+	self:setCaretIndex(self.textLength)
 
 	return true
 end
@@ -1000,34 +1094,31 @@ function Input:insertText(text)
 		return false
 	end
 
-	local caretPosition = self.caretPosition
+	local caretIndex = self.caretIndex
 
-	local previousValue = self.value
-	self.value = utf8_sub(previousValue, 1, caretPosition) .. text .. utf8_sub(previousValue, caretPosition + 1)
-	self.valueLength = utf8_len(self.value)
+	local previousValue = self.text
+	self.text = utf8_sub(previousValue, 1, caretIndex) .. text .. utf8_sub(previousValue, caretIndex + 1)
+	self.textLength = utf8_len(self.text)
 
-	self.caretPosition = caretPosition + utf8_len(text)
-
-	self:markLayoutDirty()
-	self:markCanvasDirty()
+	self:setCaretIndex(caretIndex + utf8_len(text))
 
 	return true
 end
 
 function Input:removeText(from, to)
 	from, to = math_min(from, to), math_max(from, to)
-	from, to = math_max(0, from), math_min(self.valueLength, to)
+	from, to = math_max(0, from), math_min(self.textLength, to)
 
-	local caretPosition = self.caretPosition
+	local caretIndex = self.caretIndex
 
-	local previousValue = self.value
-	self.value = utf8_sub(previousValue, 1, from) .. utf8_sub(previousValue, to + 1)
-	self.valueLength = utf8_len(self.value)
+	local previousValue = self.text
+	self.text = utf8_sub(previousValue, 1, from) .. utf8_sub(previousValue, to + 1)
+	self.textLength = utf8_len(self.text)
 
-	self.caretPosition = from
+	self:setCaretIndex(from)
 
 	self:markLayoutDirty()
-	self:markCanvasDirty()
+	self:markViewDirty()
 
 	return true
 end
@@ -1036,7 +1127,7 @@ function Input:measure()
 	local textSize = self.textSize
 	local font = self.font
 
-	local textWidth, textHeight = dxGetTextSize(self.value, availableWidth or 0, textSize, font, self.wordWrap, self.colorCoded)
+	local textWidth, textHeight = dxGetTextSize(self.text, availableWidth or 0, textSize, font, self.wordWrap, self.colorCoded)
 	textHeight = math_max(textHeight, dxGetFontHeight(textSize, font))
 
 	self.computedTextWidth = textWidth
@@ -1045,18 +1136,100 @@ function Input:measure()
 	return 200, textHeight
 end
 
-function Input:draw(x, y, width, height, foregroundColor)
-	local value = self.value
-
-	if utf8_len(value) > 0 then
-		dxDrawText(value, x, y, x + width, y + height, foregroundColor, self.textSize, self.font, self.alignX, self.alignY)
+function Input:markViewDirty()
+	if self.viewDirty then
+		return false
 	end
 
-	if self.focused then
-		local caretX = x + dxGetTextWidth(utf8_sub(value, 1, self.caretPosition), self.textSize, self.font)
-		local caretY = y + (height - self.computedTextHeight) * 0.5
+	self.viewDirty = true
 
-		dxDrawRectangle(caretX, caretY, self.caretWidth, self.computedTextHeight, self.caretColor)
+	self:markCanvasDirty()
+
+	return true
+end
+
+function Input:draw(x, y, width, height, foregroundColor)
+	local view = self.view
+
+	if view == nil then
+		view = dxCreateRenderTarget(width, height, true)
+		self.view = view
+
+		self.viewWidth = width
+		self.viewHeight = height
+
+		self.viewDirty = true
+	end
+
+	if view and (self.viewWidth ~= width or self.viewHeight ~= height) then
+		dxDestroyRenderTarget(view)
+		view = dxCreateRenderTarget(width, height, true)
+		self.view = view
+
+		self.viewWidth = width
+		self.viewHeight = height
+
+		self.viewDirty = true
+	end
+
+	if view then
+		if self.viewDirty then
+			self.viewDirty = false
+
+			local viewScroll = self.viewScroll
+
+			local text = self.text
+			local textSize = self.textSize
+
+			local font = self.font
+
+			local caretPosition = dxGetTextWidth(utf8_sub(text, 1, self.caretIndex), textSize, font)
+
+			local alignX = self.alignX
+			local alignY = self.alignY
+
+			local textWidth = self.computedTextWidth
+			local textX = alignX == AlignX.Right and width - textWidth or alignX == AlignX.Center and (width - textWidth) * 0.5 or 0
+
+			if self.updateViewScroll then
+				self.updateViewScroll = false
+
+				local offset = textX + viewScroll + caretPosition
+
+				if offset <= 0 then
+					viewScroll = -caretPosition - textX
+				elseif offset >= width then
+					viewScroll = width - caretPosition - textX
+				end
+
+				self.viewScroll = viewScroll
+			end
+
+			local previousRenderTarget = dxGetRenderTarget()
+			dxSetRenderTarget(view, true)
+
+			local dxPreviousBlendMode = dxGetBlendMode()
+			local changedBlendMode = dxSetBlendMode(BlendMode.ModulateAdd)
+
+			if utf8_len(text) > 0 then
+				dxDrawText(text, viewScroll, 0, textWidth, height, foregroundColor, textSize, font, alignX, alignY)
+			end
+
+			if self.focused then
+				local caretX = caretPosition + viewScroll
+				local caretY = (height - self.computedTextHeight) * 0.5
+
+				dxDrawRectangle(caretX, caretY, self.caretWidth, self.computedTextHeight, self.caretColor)
+			end
+
+			if changedBlendMode then
+				dxSetBlendMode(dxPreviousBlendMode)
+			end
+
+			dxSetRenderTarget(previousRenderTarget)
+		end
+
+		dxDrawImage(x, y, width, height, self.view)
 	end
 end
 
@@ -2581,7 +2754,7 @@ addEventHandler("onClientClick", root, function(button, state)
 					focusedNode:onBlur()
 				end
 
-				focusedNode.focused = false
+				focusedNode:setFocused(false)
 				focusedNode = false
 			end
 
@@ -2600,7 +2773,7 @@ addEventHandler("onClientClick", root, function(button, state)
 					end
 
 					focusedNode = hoveredNode
-					focusedNode.focused = true
+					focusedNode:setFocused(true)
 				end
 			end
 
@@ -2676,7 +2849,7 @@ local function keyPressed(key, pressed, rep)
 		end
 
 		if focusedNode and focusedNode.__input__ then
-			focusedNode:removeText(focusedNode.caretPosition - 1, focusedNode.caretPosition)
+			focusedNode:removeText(focusedNode.caretIndex - 1, focusedNode.caretIndex)
 			keyTimer = setTimer(keyPressed, rep and 50 or 250, 1, key, pressed, true)
 		end
 	end
