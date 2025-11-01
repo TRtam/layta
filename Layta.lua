@@ -1545,10 +1545,27 @@ function calculateLayout(node, availableWidth, availableHeight, parentIsMainAxis
 	end
 
 	if not node.layoutDirty then
-		return false
+		if
+			node.cachedAvailableWidth == availableWidth
+			and node.cachedAvailableHeight == availableHeight
+			and node.cachedParentIsMainAxisRow == parentIsMainAxisRow
+			and node.cachedParentStretchItems == parentStretchItems
+			and node.cachedForcedWidth == forcedWidth
+			and node.cachedForcedHeight == forcedHeight
+		then
+			return false
+		end
+		-- return false
 	end
 
 	node.layoutDirty = false
+
+	node.cachedAvailableWidth = availableWidth
+	node.cachedAvailableHeight = availableHeight
+	node.cachedParentIsMainAxisRow = parentIsMainAxisRow
+	node.cachedParentStretchItems = parentStretchItems
+	node.cachedForcedWidth = forcedWidth
+	node.cachedForcedHeight = forcedHeight
 
 	if node.resolvedLeftUnit == Unit.Auto then
 		node.computedLeft = 0
@@ -1849,7 +1866,7 @@ function calculateLayout(node, availableWidth, availableHeight, parentIsMainAxis
 			for i = 1, #secondPassItems do
 				local child = secondPassItems[i]
 
-				child.layoutDirty = true
+				-- child.layoutDirty = true
 
 				local childAvailableWidth = isMainAxisRow and containerMainInnerSize or containerCrossInnerSize
 				local childAvailableHeight = isMainAxisRow and containerCrossInnerSize or containerMainInnerSize
@@ -1916,7 +1933,7 @@ function calculateLayout(node, availableWidth, availableHeight, parentIsMainAxis
 			for i = 1, #thirdPassItems do
 				local child = thirdPassItems[i]
 
-				child.layoutDirty = true
+				-- child.layoutDirty = true
 
 				local childFlexGrow = child.flexGrow
 				local childFlexShrink = child.flexShrink
