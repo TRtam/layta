@@ -1,4 +1,7 @@
-<img src="https://github.com/TRtam/Layta/blob/main/layta-white.png" width="300" alt="Layta"/>
+<picture>
+  <source srcset="layta-black.png" media="(prefers-color-scheme: dark)">
+  <img src="layta-white.png" alt="My image">
+</picture>
 
 # Disclaimer
 Not recommended for public server use at this time, all code is experimental and subject to change.
