@@ -2011,11 +2011,13 @@ function calculateLayout(node, availableWidth, availableHeight, parentIsMainAxis
 				node.computedVerticalScrollBarThumbSize = isMainAxisRow
 						and (containerCrossInnerSize / (containerCrossInnerSize + overflowY) * containerCrossInnerSize)
 					or (containerMainInnerSize / (containerMainInnerSize + overflowY) * containerMainInnerSize)
+				node.computedVerticalScrollBarThumbSize = math_max(node.computedVerticalScrollBarThumbSize, 30)
 			end
 			if overflowX > 0 then
 				node.computedHorizontalScrollBarThumbSize = isMainAxisRow
 						and (containerMainInnerSize / (containerMainInnerSize + overflowX) * containerMainInnerSize)
 					or (containerCrossInnerSize / (containerCrossInnerSize + overflowX) * containerCrossInnerSize)
+				node.computedHorizontalScrollBarThumbSize = math_max(node.computedHorizontalScrollBarThumbSize, 30)
 			end
 		end
 
@@ -2569,95 +2571,95 @@ local function renderer(node, parentRenderX, parentRenderY, parentVisualX, paren
 				local computedOverflowY = node.computedOverflowY
 
 				if computedOverflowY > 0 then
-					local renderScrollbarWidth = node.scrollbarSize
-					local renderScrollbarHeight = computedHeight
+					local renderScrollBarWidth = node.scrollBarSize
+					local renderScrollBarHeight = computedHeight
 
-					node.renderVerticalScrollBarWidth = renderScrollbarWidth
-					node.renderVerticalScrollBarHeight = renderScrollbarHeight
+					node.renderVerticalScrollBarWidth = renderScrollBarWidth
+					node.renderVerticalScrollBarHeight = renderScrollBarHeight
 
-					local renderScrollbarX = renderX + computedWidth - renderScrollbarWidth
-					local renderScrollbarY = renderY
+					local renderScrollBarX = renderX + computedWidth - renderScrollBarWidth
+					local renderScrollBarY = renderY
 
-					node.renderVerticalScrollBarX = renderScrollbarX
-					node.renderVerticalScrollBarY = renderScrollbarY
+					node.renderVerticalScrollBarX = renderScrollBarX
+					node.renderVerticalScrollBarY = renderScrollBarY
 
-					local visualScrollbarX = computedWidth - renderScrollbarWidth
-					local visualScrollbarY = 0
+					local visualScrollBarX = computedWidth - renderScrollBarWidth
+					local visualScrollBarY = 0
 
-					local renderScrollbarThumbWidth = node.scrollbarSize
-					local renderScrollbarThumbHeight = node.computedVerticalScrollBarThumbSize
+					local renderScrollBarThumbWidth = node.scrollBarSize
+					local renderScrollBarThumbHeight = node.computedVerticalScrollBarThumbSize
 
-					node.renderVerticalScrollBarThumbWidth = renderScrollbarThumbWidth
-					node.renderVerticalScrollBarThumbHeight = renderScrollbarThumbHeight
+					node.renderVerticalScrollBarThumbWidth = renderScrollBarThumbWidth
+					node.renderVerticalScrollBarThumbHeight = renderScrollBarThumbHeight
 
-					local scrollbarThumbOffset = math_max(
+					local scrollBarThumbOffset = math_max(
 						0,
 						math_min(
-							node.scrollTop / computedOverflowY * (renderScrollbarHeight - renderScrollbarThumbHeight),
-							renderScrollbarHeight - renderScrollbarThumbHeight
+							node.scrollTop / computedOverflowY * (renderScrollBarHeight - renderScrollBarThumbHeight),
+							renderScrollBarHeight - renderScrollBarThumbHeight
 						)
 					)
 
-					local renderScrollbarThumbX = renderScrollbarX
-					local renderScrollbarThumbY = renderScrollbarY + scrollbarThumbOffset
+					local renderScrollBarThumbX = renderScrollBarX
+					local renderScrollBarThumbY = renderScrollBarY + scrollBarThumbOffset
 
-					node.renderVerticalScrollBarThumbX = renderScrollbarThumbX
-					node.renderVerticalScrollBarThumbY = renderScrollbarThumbY
+					node.renderVerticalScrollBarThumbX = renderScrollBarThumbX
+					node.renderVerticalScrollBarThumbY = renderScrollBarThumbY
 
-					local visualScrollbarThumbX = visualScrollbarX
-					local visualScrollbarThumbY = visualScrollbarY + scrollbarThumbOffset
+					local visualScrollBarThumbX = visualScrollBarX
+					local visualScrollBarThumbY = visualScrollBarY + scrollBarThumbOffset
 
-					dxDrawRectangle(visualScrollbarX, visualScrollbarY, renderScrollbarWidth, renderScrollbarHeight, self.scrollBarTrackColor)
+					dxDrawRectangle(visualScrollBarX, visualScrollBarY, renderScrollBarWidth, renderScrollBarHeight, node.scrollBarTrackColor)
 					dxDrawRectangle(
-						visualScrollbarThumbX,
-						visualScrollbarThumbY,
-						renderScrollbarThumbWidth,
-						renderScrollbarThumbHeight,
-						self.scrollBarThumbColor
+						visualScrollBarThumbX,
+						visualScrollBarThumbY,
+						renderScrollBarThumbWidth,
+						renderScrollBarThumbHeight,
+						node.scrollBarThumbColor
 					)
 				end
 
 				if computedOverflowX > 0 then
-					local renderScrollbarWidth = computedWidth - (computedOverflowY > 0 and node.scrollbarSize or 0)
-					local renderScrollbarHeight = node.scrollbarSize
+					local renderScrollBarWidth = computedWidth - (computedOverflowY > 0 and node.scrollBarSize or 0)
+					local renderScrollBarHeight = node.scrollBarSize
 
-					node.renderHorizontalScrollBarWidth = renderScrollbarWidth
-					node.renderHorizontalScrollBarHeight = renderScrollbarHeight
+					node.renderHorizontalScrollBarWidth = renderScrollBarWidth
+					node.renderHorizontalScrollBarHeight = renderScrollBarHeight
 
-					local renderScrollbarX = renderX
-					local renderScrollbarY = renderY + computedHeight - renderScrollbarHeight
+					local renderScrollBarX = renderX
+					local renderScrollBarY = renderY + computedHeight - renderScrollBarHeight
 
-					node.renderHorizontalScrollBarX = renderScrollbarX
-					node.renderHorizontalScrollBarY = renderScrollbarY
+					node.renderHorizontalScrollBarX = renderScrollBarX
+					node.renderHorizontalScrollBarY = renderScrollBarY
 
-					local visualScrollbarX = 0
-					local visualScrollbarY = computedHeight - renderScrollbarHeight
+					local visualScrollBarX = 0
+					local visualScrollBarY = computedHeight - renderScrollBarHeight
 
-					local renderScrollbarThumbWidth = node.computedHorizontalScrollBarThumbSize
-					local renderScrollbarThumbHeight = node.scrollbarSize
+					local renderScrollBarThumbWidth = node.computedHorizontalScrollBarThumbSize
+					local renderScrollBarThumbHeight = node.scrollBarSize
 
-					node.renderHorizontalScrollBarThumbWidth = renderScrollbarThumbWidth
-					node.renderHorizontalScrollBarThumbHeight = renderScrollbarThumbHeight
+					node.renderHorizontalScrollBarThumbWidth = renderScrollBarThumbWidth
+					node.renderHorizontalScrollBarThumbHeight = renderScrollBarThumbHeight
 
-					local scrollbarThumbOffset = math_max(
+					local scrollBarThumbOffset = math_max(
 						0,
 						math_min(
-							node.scrollLeft / computedOverflowX * (renderScrollbarWidth - renderScrollbarThumbWidth),
-							renderScrollbarWidth - renderScrollbarThumbWidth
+							node.scrollLeft / computedOverflowX * (renderScrollBarWidth - renderScrollBarThumbWidth),
+							renderScrollBarWidth - renderScrollBarThumbWidth
 						)
 					)
 
-					local renderScrollbarThumbX = renderScrollbarX + scrollbarThumbOffset
-					local renderScrollbarThumbY = renderScrollbarY
+					local renderScrollBarThumbX = renderScrollBarX + scrollBarThumbOffset
+					local renderScrollBarThumbY = renderScrollBarY
 
-					node.renderHorizontalScrollBarThumbX = renderScrollbarThumbX
-					node.renderHorizontalScrollBarThumbY = renderScrollbarThumbY
+					node.renderHorizontalScrollBarThumbX = renderScrollBarThumbX
+					node.renderHorizontalScrollBarThumbY = renderScrollBarThumbY
 
-					local visualScrollbarThumbX = visualScrollbarX + scrollbarThumbOffset
-					local visualScrollbarThumbY = visualScrollbarY
+					local visualScrollBarThumbX = visualScrollBarX + scrollBarThumbOffset
+					local visualScrollBarThumbY = visualScrollBarY
 
-					dxDrawRectangle(visualScrollbarX, visualScrollbarY, renderScrollbarWidth, renderScrollbarHeight, 0xff171717)
-					dxDrawRectangle(visualScrollbarThumbX, visualScrollbarThumbY, renderScrollbarThumbWidth, renderScrollbarThumbHeight, 0xffffffff)
+					dxDrawRectangle(visualScrollBarX, visualScrollBarY, renderScrollBarWidth, renderScrollBarHeight, 0xff171717)
+					dxDrawRectangle(visualScrollBarThumbX, visualScrollBarThumbY, renderScrollBarThumbWidth, renderScrollBarThumbHeight, 0xffffffff)
 				end
 			end
 
@@ -2696,11 +2698,29 @@ local function renderer(node, parentRenderX, parentRenderY, parentVisualX, paren
 			node:draw(innerX, innerY, innerWidth, innerHeight, foregroundColor)
 		end
 
+		local scrollLeft = node.scrollLeft
+		local scrollTop = node.scrollTop
+
 		local children = node.children
 		local childCount = #children
 
 		for i = 1, childCount do
-			renderer(children[i], renderX, renderY, visualX, visualY, foregroundColor)
+			local child = children[i]
+
+			local childComputedWidth = child.computedWidth
+			local childComputedHeight = child.computedHeight
+
+			local childComputedX = child.computedX + scrollLeft
+			local childComputedY = child.computedY + scrollTop
+
+			if
+				childComputedX + childComputedWidth > 0
+				and childComputedY + childComputedHeight > 0
+				and childComputedX < computedWidth
+				and childComputedY < computedHeight
+			then
+				renderer(child, renderX, renderY, visualX, visualY, foregroundColor)
+			end
 		end
 	end
 
@@ -2722,14 +2742,14 @@ local focusedNode = false
 
 local hoveredHorizontalScrollBar = false
 local hoveredVerticalScrollBar = false
-local hoveredScrollbarAttachedTo
+local hoveredScrollBarAttachedTo
 
 local draggingHorizontalScrollBar = false
 local draggingVerticalScrollBar = false
-local draggingScrollbarAttachedTo
+local draggingScrollBarAttachedTo
 
-local draggingScrollbarDeltaX = 0
-local draggingScrollbarDeltaY = 0
+local draggingScrollBarDeltaX = 0
+local draggingScrollBarDeltaY = 0
 
 local function getHoveredNode(node)
 	if not node.visible then
@@ -2749,7 +2769,7 @@ local function getHoveredNode(node)
 	end
 
 	if hovered and (node.overflow ~= Overflow.None and node.overflow ~= Overflow.Hidden) then
-		local hoveringHorizontalScrollbar = node.computedOverflowX > 0
+		local hoveringHorizontalScrollBar = node.computedOverflowX > 0
 			and isPointInRectangle(
 				cursorX,
 				cursorY,
@@ -2758,7 +2778,7 @@ local function getHoveredNode(node)
 				node.renderHorizontalScrollBarWidth,
 				node.renderHorizontalScrollBarHeight
 			)
-		local hoveringVerticalScrollbar = node.computedOverflowY > 0
+		local hoveringVerticalScrollBar = node.computedOverflowY > 0
 			and isPointInRectangle(
 				cursorX,
 				cursorY,
@@ -2768,8 +2788,8 @@ local function getHoveredNode(node)
 				node.renderVerticalScrollBarHeight
 			)
 
-		if hoveringHorizontalScrollbar or hoveringVerticalScrollbar then
-			return node, hoveringHorizontalScrollbar, hoveringVerticalScrollbar
+		if hoveringHorizontalScrollBar or hoveringVerticalScrollBar then
+			return node, hoveringHorizontalScrollBar, hoveringVerticalScrollBar
 		end
 	end
 
@@ -2785,24 +2805,24 @@ local function getHoveredNode(node)
 	for i = childcount, 1, -1 do
 		local child = children[i]
 
-		-- local childComputedWidth = child.computedWidth
-		-- local childComputedHeight = child.computedHeight
+		local childComputedWidth = child.computedWidth
+		local childComputedHeight = child.computedHeight
 
-		-- local childComputedX = child.computedX + scrollLeft
-		-- local childComputedY = child.computedY + scrollTop
+		local childComputedX = child.computedX + scrollLeft
+		local childComputedY = child.computedY + scrollTop
 
-		-- if
-		-- 	childComputedX + childComputedWidth > 0
-		-- 	and childComputedY + childComputedHeight > 0
-		-- 	and childComputedX < computedWidth
-		-- 	and childComputedY < computedHeight
-		-- then
-		local hoveredChild, hoveringHorizontalScrollbar, hoveringVerticalScrollbar = getHoveredNode(child)
+		if
+			childComputedX + childComputedWidth > 0
+			and childComputedY + childComputedHeight > 0
+			and childComputedX < computedWidth
+			and childComputedY < computedHeight
+		then
+			local hoveredChild, hoveringHorizontalScrollBar, hoveringVerticalScrollBar = getHoveredNode(child)
 
-		if hoveredChild then
-			return hoveredChild, hoveringHorizontalScrollbar, hoveringVerticalScrollbar
+			if hoveredChild then
+				return hoveredChild, hoveringHorizontalScrollBar, hoveringVerticalScrollBar
+			end
 		end
-		-- end
 	end
 
 	if not hovered then
@@ -2827,7 +2847,7 @@ local function cursor()
 	cursorX = x * SCREEN_WIDTH
 	cursorY = y * SCREEN_HEIGHT
 
-	local hoveringNode, hoveringHorizontalScrollbar, hoveringVerticalScrollbar = getHoveredNode(tree)
+	local hoveringNode, hoveringHorizontalScrollBar, hoveringVerticalScrollBar = getHoveredNode(tree)
 
 	if hoveringNode ~= hoveredNode then
 		if hoveredNode and hoveredNode.onCursorLeave then
@@ -2836,7 +2856,7 @@ local function cursor()
 
 		hoveredNode = false
 
-		if not hoveringHorizontalScrollbar and not hoveringVerticalScrollbar then
+		if not hoveringHorizontalScrollBar and not hoveringVerticalScrollBar then
 			hoveredNode = hoveringNode
 
 			if hoveredNode and hoveredNode.onCursorEnter then
@@ -2845,29 +2865,29 @@ local function cursor()
 		end
 	end
 
-	hoveredHorizontalScrollBar = hoveringHorizontalScrollbar
-	hoveredVerticalScrollBar = hoveringVerticalScrollbar
-	hoveredScrollbarAttachedTo = (hoveredHorizontalScrollBar or hoveredVerticalScrollBar) and hoveredNode or nil
+	hoveredHorizontalScrollBar = hoveringHorizontalScrollBar
+	hoveredVerticalScrollBar = hoveringVerticalScrollBar
+	hoveredScrollBarAttachedTo = (hoveredHorizontalScrollBar or hoveredVerticalScrollBar) and hoveringNode or nil
 
-	if draggingScrollbarAttachedTo then
-		draggingScrollbarAttachedTo:markCanvasDirty()
+	if draggingScrollBarAttachedTo then
+		draggingScrollBarAttachedTo:markCanvasDirty()
 
 		if draggingHorizontalScrollBar then
-			local movingX = cursorX - draggingScrollbarAttachedTo.renderHorizontalScrollBarX - draggingScrollbarDeltaX
-			local computedOverflowX = draggingScrollbarAttachedTo.computedOverflowX
+			local movingX = cursorX - draggingScrollBarAttachedTo.renderHorizontalScrollBarX - draggingScrollBarDeltaX
+			local computedOverflowX = draggingScrollBarAttachedTo.computedOverflowX
 
 			local scrollLeft = movingX
-				/ (draggingScrollbarAttachedTo.renderHorizontalScrollBarWidth - draggingScrollbarAttachedTo.renderHorizontalScrollBarThumbWidth)
+				/ (draggingScrollBarAttachedTo.renderHorizontalScrollBarWidth - draggingScrollBarAttachedTo.renderHorizontalScrollBarThumbWidth)
 				* computedOverflowX
-			draggingScrollbarAttachedTo.scrollLeft = math_max(0, math_min(scrollLeft, computedOverflowX))
+			draggingScrollBarAttachedTo.scrollLeft = math_max(0, math_min(scrollLeft, computedOverflowX))
 		elseif draggingVerticalScrollBar then
-			local movingY = cursorY - draggingScrollbarAttachedTo.renderVerticalScrollBarY - draggingScrollbarDeltaY
-			local computedOverflowY = draggingScrollbarAttachedTo.computedOverflowY
+			local movingY = cursorY - draggingScrollBarAttachedTo.renderVerticalScrollBarY - draggingScrollBarDeltaY
+			local computedOverflowY = draggingScrollBarAttachedTo.computedOverflowY
 
 			local scrollTop = movingY
-				/ (draggingScrollbarAttachedTo.renderVerticalScrollBarHeight - draggingScrollbarAttachedTo.renderVerticalScrollBarThumbHeight)
+				/ (draggingScrollBarAttachedTo.renderVerticalScrollBarHeight - draggingScrollBarAttachedTo.renderVerticalScrollBarThumbHeight)
 				* computedOverflowY
-			draggingScrollbarAttachedTo.scrollTop = math_max(0, math_min(scrollTop, computedOverflowY))
+			draggingScrollBarAttachedTo.scrollTop = math_max(0, math_min(scrollTop, computedOverflowY))
 		end
 	end
 
@@ -2923,29 +2943,29 @@ local function onClick(button, state)
 				end
 			end
 
-			if hoveredScrollbarAttachedTo then
-				local scrollbarThumbX = hoveredHorizontalScrollBar and hoveredScrollbarAttachedTo.renderHorizontalScrollBarThumbX
-					or hoveredVerticalScrollBar and hoveredScrollbarAttachedTo.renderVerticalScrollBarThumbX
-				local scrollbarThumbY = hoveredHorizontalScrollBar and hoveredScrollbarAttachedTo.renderHorizontalScrollBarThumbY
-					or hoveredVerticalScrollBar and hoveredScrollbarAttachedTo.renderVerticalScrollBarThumbY
+			if hoveredScrollBarAttachedTo then
+				local scrollBarThumbX = hoveredHorizontalScrollBar and hoveredScrollBarAttachedTo.renderHorizontalScrollBarThumbX
+					or hoveredVerticalScrollBar and hoveredScrollBarAttachedTo.renderVerticalScrollBarThumbX
+				local scrollBarThumbY = hoveredHorizontalScrollBar and hoveredScrollBarAttachedTo.renderHorizontalScrollBarThumbY
+					or hoveredVerticalScrollBar and hoveredScrollBarAttachedTo.renderVerticalScrollBarThumbY
 
 				if
 					isPointInRectangle(
 						cursorX,
 						cursorY,
-						scrollbarThumbX,
-						scrollbarThumbY,
-						hoveredHorizontalScrollBar and hoveredScrollbarAttachedTo.renderHorizontalScrollBarThumbWidth
-							or hoveredVerticalScrollBar and hoveredScrollbarAttachedTo.renderVerticalScrollBarThumbWidth,
-						hoveredHorizontalScrollBar and hoveredScrollbarAttachedTo.renderHorizontalScrollBarHeight
-							or hoveredVerticalScrollBar and hoveredScrollbarAttachedTo.renderVerticalScrollBarHeight
+						scrollBarThumbX,
+						scrollBarThumbY,
+						hoveredHorizontalScrollBar and hoveredScrollBarAttachedTo.renderHorizontalScrollBarThumbWidth
+							or hoveredVerticalScrollBar and hoveredScrollBarAttachedTo.renderVerticalScrollBarThumbWidth,
+						hoveredHorizontalScrollBar and hoveredScrollBarAttachedTo.renderHorizontalScrollBarThumbHeight
+							or hoveredVerticalScrollBar and hoveredScrollBarAttachedTo.renderVerticalScrollBarThumbHeight
 					)
 				then
 					draggingHorizontalScrollBar = hoveredHorizontalScrollBar
 					draggingVerticalScrollBar = hoveredVerticalScrollBar
-					draggingScrollbarAttachedTo = hoveredScrollbarAttachedTo
-					draggingScrollbarDeltaX = cursorX - scrollbarThumbX
-					draggingScrollbarDeltaY = cursorY - scrollbarThumbY
+					draggingScrollBarAttachedTo = hoveredScrollBarAttachedTo
+					draggingScrollBarDeltaX = cursorX - scrollBarThumbX
+					draggingScrollBarDeltaY = cursorY - scrollBarThumbY
 				end
 			end
 		else
@@ -2973,12 +2993,12 @@ local function onClick(button, state)
 				clickedNode = false
 			end
 
-			if draggingScrollbarAttachedTo then
+			if draggingScrollBarAttachedTo then
 				draggingHorizontalScrollBar = false
 				draggingVerticalScrollBar = false
-				draggingScrollbarAttachedTo = nil
-				draggingScrollbarDeltaX = 0
-				draggingScrollbarDeltaY = 0
+				draggingScrollBarAttachedTo = nil
+				draggingScrollBarDeltaX = 0
+				draggingScrollBarDeltaY = 0
 			end
 		end
 	end
