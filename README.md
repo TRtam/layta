@@ -1,5 +1,8 @@
 <img src="https://github.com/TRtam/Layta/blob/main/layta-white.png" width="300" alt="Layta"/>
 
+# Disclaimer
+Not recommended for public server use at this time, all code is experimental and subject to change.
+
 # Layta
 <b>Layta</b> is a embeddable modern flexbox-based layout engine and graphical user-interface (GUI) framework for MTA:SA designed to simplify interface development. It provides a comprehensive toolkit for building responsive, visually consistent user interfaces with minimal complexity. <b>Layta</b> streamlines layout management and component design, empowering developers to create modern applications efficiently and elegantly.
 
@@ -13,7 +16,7 @@ Adding <b>Layta</b> to your project :
 
 2. Place Layta's resource to your resources folder.
   
-3. Go to your console and type start layta.
+3. Go to your console and type `start layta`.
 
 4. Import layta into your script like so:
 
