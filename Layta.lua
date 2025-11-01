@@ -851,6 +851,20 @@ function Node:setId(id)
 	return true
 end
 
+function Node:setClicked(clicked)
+	if type(clicked) ~= "boolean" then
+		return false
+	end
+
+	if clicked == self.clicked then
+		return false
+	end
+
+	self.clicked = clicked
+
+	return true
+end
+
 function Node:setFocused(focused)
 	if type(focused) ~= "boolean" then
 		return false
@@ -1068,6 +1082,58 @@ function Input:moveCaretIndex(amount, selecting)
 	return true
 end
 
+function Input:getCaretIndexByCursor(cursorX)
+	local alignX = self.alignX
+
+	local textWidth = self.computedTextWidth
+	local textX = alignX == AlignX.Right and self.width - textWidth or alignX == AlignX.Center and (self.width - textWidth) * 0.5 or 0
+
+	cursorX = cursorX - self.renderX - textX - self.viewScroll
+
+	local textLength = self.textLength
+
+	if textLength == 0 then
+		return 0
+	end
+
+	if cursorX <= 0 then
+		return 0
+	elseif cursorX >= self.computedTextWidth then
+		return textLength
+	end
+
+	local text = self.text
+
+	local caretIndex = 0
+
+	local left = 0
+	local right = textLength
+
+	while left <= right do
+		local mid = math_floor((left + right) * 0.5)
+		local widthToMid = dxGetTextWidth(utf8_sub(text, 1, mid))
+
+		if widthToMid <= cursorX then
+			caretIndex = mid
+			left = mid + 1
+		else
+			right = mid - 1
+		end
+	end
+
+	if caretIndex < textLength then
+		local widthBefore = dxGetTextWidth(utf8_sub(text, 1, caretIndex))
+		local widthNext = dxGetTextWidth(utf8_sub(text, 1, caretIndex + 1))
+		local midPoint = (widthBefore + widthNext) * 0.5
+
+		if cursorX >= midPoint then
+			caretIndex = caretIndex + 1
+		end
+	end
+
+	return caretIndex
+end
+
 function Input:setText(text)
 	if type(text) ~= "string" then
 		return false
@@ -1100,6 +1166,8 @@ function Input:insertText(text)
 	self.text = utf8_sub(previousValue, 1, caretIndex) .. text .. utf8_sub(previousValue, caretIndex + 1)
 	self.textLength = utf8_len(self.text)
 
+	self:markLayoutDirty()
+
 	self:setCaretIndex(caretIndex + utf8_len(text))
 
 	return true
@@ -1115,10 +1183,9 @@ function Input:removeText(from, to)
 	self.text = utf8_sub(previousValue, 1, from) .. utf8_sub(previousValue, to + 1)
 	self.textLength = utf8_len(self.text)
 
-	self:setCaretIndex(from)
-
 	self:markLayoutDirty()
-	self:markViewDirty()
+
+	self:setCaretIndex(from)
 
 	return true
 end
@@ -1183,10 +1250,10 @@ function Input:draw(x, y, width, height, foregroundColor)
 
 			local font = self.font
 
-			local caretPosition = dxGetTextWidth(utf8_sub(text, 1, self.caretIndex), textSize, font)
-
 			local alignX = self.alignX
 			local alignY = self.alignY
+
+			local caretPosition = dxGetTextWidth(utf8_sub(text, 1, self.caretIndex), textSize, font)
 
 			local textWidth = self.computedTextWidth
 			local textX = alignX == AlignX.Right and width - textWidth or alignX == AlignX.Center and (width - textWidth) * 0.5 or 0
@@ -1212,11 +1279,11 @@ function Input:draw(x, y, width, height, foregroundColor)
 			local changedBlendMode = dxSetBlendMode(BlendMode.ModulateAdd)
 
 			if utf8_len(text) > 0 then
-				dxDrawText(text, viewScroll, 0, textWidth, height, foregroundColor, textSize, font, alignX, alignY)
+				dxDrawText(text, textX + viewScroll, 0, width, height, foregroundColor, textSize, font, AlignX.Left, alignY)
 			end
 
 			if self.focused then
-				local caretX = caretPosition + viewScroll
+				local caretX = textX + caretPosition + viewScroll
 				local caretY = (height - self.computedTextHeight) * 0.5
 
 				dxDrawRectangle(caretX, caretY, self.caretWidth, self.computedTextHeight, self.caretColor)
@@ -1400,6 +1467,10 @@ function splitChildren(
 end
 
 function calculateLayout(node, availableWidth, availableHeight, parentIsMainAxisRow, parentStretchItems, forcedWidth, forcedHeight)
+	if node == nil then
+		node = tree
+	end
+
 	if not isNode(node) then
 		return false
 	end
@@ -2087,6 +2158,10 @@ technique rectangle {
 ]]
 
 local function renderer(node, parentRenderX, parentRenderY, parentVisualX, parentVisualY, parentForegroundColor)
+	if node == nil then
+		node = tree
+	end
+
 	if not isNode(node) then
 		return false
 	end
@@ -2556,20 +2631,6 @@ local function renderer(node, parentRenderX, parentRenderY, parentVisualX, paren
 end
 
 --
--- Tree
---
-
-tree = Node()
-
-addEventHandler("onClientRender", root, function()
-	calculateLayout(tree)
-end)
-
-addEventHandler("onClientRender", root, function()
-	renderer(tree)
-end)
-
---
 -- Cursor / Keyboard
 --
 
@@ -2593,7 +2654,7 @@ local draggingScrollbarAttachedTo
 local draggingScrollbarDeltaX = 0
 local draggingScrollbarDeltaY = 0
 
-function getHoveredNode(node)
+local function getHoveredNode(node)
 	if not node.visible then
 		return false
 	end
@@ -2669,14 +2730,12 @@ function getHoveredNode(node)
 
 	if not hovered then
 		return false
-	else
-		dxDrawRectangle(renderX, renderY, renderWidth, renderHeight, 0x0f0088ff)
 	end
 
 	return node
 end
 
-addEventHandler("onClientRender", root, function()
+local function cursor()
 	cursorShowing = isCursorShowing()
 
 	if not cursorShowing then
@@ -2736,15 +2795,19 @@ addEventHandler("onClientRender", root, function()
 	end
 
 	if hoveredNode or clickedNode then
-		local node = hoveredNode or clickedNode
+		local movingNode = hoveredNode or clickedNode
 
-		if node.onCursorMove then
-			node:onCursorMove(cursorX, cursorY)
+		if movingNode.onCursorMove then
+			movingNode:onCursorMove(cursorX, cursorY)
+		end
+
+		if clickedNode and clickedNode.__input__ then
+			clickedNode:setCaretIndex(clickedNode:getCaretIndexByCursor(cursorX))
 		end
 	end
-end)
+end
 
-addEventHandler("onClientClick", root, function(button, state)
+local function onClick(button, state)
 	local pressed = state == "down"
 
 	if button == "left" then
@@ -2765,6 +2828,12 @@ addEventHandler("onClientClick", root, function(button, state)
 					end
 
 					clickedNode = hoveredNode
+
+					local cursordown = Event("cursordown")
+					cursordown.cursorX = cursorX
+					cursordown.cursorY = cursorY
+
+					clickedNode:dispatchEvent(cursordown)
 				end
 
 				if hoveredNode.focusable then
@@ -2808,8 +2877,20 @@ addEventHandler("onClientClick", root, function(button, state)
 					clickedNode:onCursorUp(button, cursorX, cursorY)
 				end
 
+				local cursorup = Event("cursorup")
+				cursorup.cursorX = cursorX
+				cursorup.cursorY = cursorY
+
+				clickedNode:dispatchEvent(cursorup)
+
 				if clickedNode == hoveredNode and clickedNode.onCursorClick then
 					clickedNode:onCursorClick(cursorX, cursorY)
+
+					local cursorclick = Event("cursorclick")
+					cursorclick.cursorX = cursorX
+					cursorclick.cursorY = cursorY
+
+					clickedNode:dispatchEvent(cursorclick)
 				end
 
 				clickedNode = false
@@ -2824,9 +2905,9 @@ addEventHandler("onClientClick", root, function(button, state)
 			end
 		end
 	end
-end)
+end
 
-addEventHandler("onClientCharacter", root, function(character)
+local function onCharacter(character)
 	if not focusedNode then
 		return
 	end
@@ -2834,11 +2915,11 @@ addEventHandler("onClientCharacter", root, function(character)
 	if focusedNode.__input__ then
 		focusedNode:insertText(character)
 	end
-end)
+end
 
 local keyTimer
 
-local function keyPressed(key, pressed, rep)
+local function onKeyPressed(key, pressed, rep)
 	if isTimer(keyTimer) then
 		killTimer(keyTimer)
 	end
@@ -2850,8 +2931,35 @@ local function keyPressed(key, pressed, rep)
 
 		if focusedNode and focusedNode.__input__ then
 			focusedNode:removeText(focusedNode.caretIndex - 1, focusedNode.caretIndex)
-			keyTimer = setTimer(keyPressed, rep and 50 or 250, 1, key, pressed, true)
+			keyTimer = setTimer(onKeyPressed, rep and 50 or 250, 1, key, pressed, true)
 		end
 	end
 end
-addEventHandler("onClientKey", root, keyPressed)
+
+--
+-- Tree
+--
+
+tree = Node()
+
+--
+-- Initializer / Finalizer
+--
+
+function initialize()
+	addEventHandler("onClientRender", root, calculateLayout)
+	addEventHandler("onClientRender", root, renderer)
+	addEventHandler("onClientRender", root, cursor)
+	addEventHandler("onClientClick", root, onClick)
+	addEventHandler("onClientCharacter", root, onCharacter)
+	addEventHandler("onClientKey", root, onKeyPressed)
+end
+
+function finalize()
+	removeEventHandler("onClientRender", root, calculateLayout)
+	removeEventHandler("onClientRender", root, renderer)
+	removeEventHandler("onClientRender", root, cursor)
+	removeEventHandler("onClientClick", root, onClick)
+	removeEventHandler("onClientCharacter", root, onCharacter)
+	removeEventHandler("onClientKey", root, onKeyPressed)
+end
