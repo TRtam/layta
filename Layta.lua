@@ -11,6 +11,8 @@ local math_max = math.max
 
 local utf8_len = utf8.len
 local utf8_sub = utf8.sub
+local utf8_gsub = utf8.gsub
+local utf8_match = utf8.match
 
 local isElement = isElement
 local destroyElement = destroyElement
@@ -20,6 +22,12 @@ local dxGetTextWidth = dxGetTextWidth
 local dxGetTextSize = dxGetTextSize
 local dxGetFontHeight = dxGetFontHeight
 local dxGetMaterialSize = dxGetMaterialSize
+
+--
+-- Custom events
+--
+
+addEvent("Layta.onSvgUpdated")
 
 --
 -- Enums
@@ -213,7 +221,7 @@ local WHITE = 0xffffffff
 local BLACK = 0xff000000
 
 local function getColorAlpha(color)
-	return math_floor(color / 0x1000000) % 0x100
+	return color / 0x1000000 % 256
 end
 
 --
@@ -224,6 +232,8 @@ local _dxCreateRenderTarget = dxCreateRenderTarget
 local _dxSetRenderTarget = dxSetRenderTarget
 local _dxSetBlendMode = dxSetBlendMode
 local _dxGetBlendMode = dxGetBlendMode
+local _dxCreateFont = dxCreateFont
+local _svgCreate = svgCreate
 local _dxDrawImage = dxDrawImage
 local dxDrawText = dxDrawText
 local dxDrawRectangle = dxDrawRectangle
@@ -231,6 +241,8 @@ local dxDrawRectangle = dxDrawRectangle
 local dxCreatedRenderTargets = {}
 local dxCurrentRenderTarget
 local dxCurrentBlendMode = BlendMode.Blend
+local dxCreatedFonts = {}
+local createdSvgs = {}
 
 local function dxIsRenderTarget(dxRenderTarget)
 	return dxCreatedRenderTargets[dxRenderTarget] == true
@@ -240,6 +252,7 @@ local function dxCreateRenderTarget(width, height, alpha)
 	local dxRenderTarget = _dxCreateRenderTarget(width, height, alpha)
 
 	if dxRenderTarget then
+		dxSetTextureEdge(dxRenderTarget, "clamp")
 		dxCreatedRenderTargets[dxRenderTarget] = true
 	end
 
@@ -277,7 +290,7 @@ local function dxSetBlendMode(blendMode)
 
 	local success = _dxSetBlendMode(blendMode)
 
-	if succes then
+	if success then
 		dxCurrentBlendMode = blendMode
 	end
 
@@ -286,6 +299,41 @@ end
 
 local function dxGetBlendMode()
 	return dxCurrentBlendMode
+end
+
+function dxCreateFont(path, size)
+	local id = path .. size
+
+	if isElement(dxCreatedFonts[id]) then
+		return dxCreatedFonts[id]
+	end
+
+	local font = _dxCreateFont(path, size, false, "cleartype_natural")
+
+	if font then
+		dxCreatedFonts[id] = font
+	end
+
+	return font
+end
+
+function svgCreate(width, height, str)
+	local id = width .. height .. str
+
+	if isElement(createdSvgs[id]) then
+		return createdSvgs[id]
+	end
+
+	local svg = _svgCreate(width, height, str, function(svg)
+		dxSetTextureEdge(svg, "clamp")
+		triggerEvent("Layta.onSvgUpdated", svg)
+	end)
+
+	if svg then
+		createdSvgs[id] = svg
+	end
+
+	return svg
 end
 
 local function dxDrawImage(x, y, width, height, material, rotation, rotationCenterOffsetX, rotationCenterOffsetY, color)
@@ -492,7 +540,7 @@ end
 Node = createClass(EventTarget)
 Node.__node__ = true
 
-local function isNode(node)
+function isNode(node)
 	return type(node) == "table" and node.__node__ == true
 end
 
@@ -514,6 +562,8 @@ function Node:constructor(attributes, ...)
 	self.hoverable = type(attributes.hoverable) ~= "boolean" and true or attributes.hoverable
 	self.clickable = type(attributes.clickable) ~= "boolean" and true or attributes.clickable
 	self.focusable = attributes.focusable or false
+
+	self.ignoreParentBounds = attributes.ignoreParentBounds or false
 
 	--
 	-- Dirty flags
@@ -733,9 +783,17 @@ function Node:constructor(attributes, ...)
 	self.onCursorMove = attributes.onCursorMove
 	self.onCursorUp = attributes.onCursorUp
 
+	--
+	-- Append any children
+	--
+
 	for i = 1, select("#", ...) do
 		self:appendChild(select(i, ...))
 	end
+
+	--
+	-- Call methods
+	--
 
 	self:setId(attributes.id)
 	self:setVisible(attributes.visible)
@@ -951,6 +1009,10 @@ end
 Text = createClass(Node)
 Text.__text__ = true
 
+function isText(text)
+	return type(text) == "table" and text.__text__ == true
+end
+
 function Text:constructor(attributes)
 	if type(attributes) ~= "table" then
 		attributes = {}
@@ -1012,16 +1074,28 @@ end
 Image = createClass(Node)
 Image.__image__ = true
 
+function isImage(image)
+	return type(image) == "table" and image.__image__ == true
+end
+
 function Image:constructor(attributes)
 	if type(attributes) ~= "table" then
 		attributes = {}
 	end
 
 	--
+	-- Node properties
+	--
+
+	self.bOnSvgUpdated = function()
+		self:onSvgUpdated()
+	end
+
+	--
 	-- Styles
 	--
 
-	self.material = isMaterial(attributes.material) and attributes.material or false
+	self.material = false
 
 	--
 	-- Computed values
@@ -1031,6 +1105,43 @@ function Image:constructor(attributes)
 	self.computedMaterialHeight = 0
 
 	Node.constructor(self, attributes)
+
+	--
+	-- Call methods
+	--
+
+	self:setMaterial(attributes.material)
+end
+
+function Image:onSvgUpdated()
+	self:markCanvasDirty()
+end
+
+function Image:setMaterial(material)
+	local valid, materialType = isMaterial(material)
+
+	if material ~= false and not valid then
+		return false
+	end
+
+	if material == self.material then
+		return false
+	end
+
+	local previousMaterial = self.material
+	local previousMaterialValid, previousMaterialType = isMaterial(previousMaterial)
+
+	if previousMaterialValid and previousMaterialType == MaterialType.Svg then
+		removeEventHandler("Layta.onSvgUpdated", previousMaterial, self.bOnSvgUpdated)
+	end
+
+	self.material = material
+
+	if valid and materialType == MaterialType.Svg then
+		addEventHandler("Layta.onSvgUpdated", material, self.bOnSvgUpdated)
+	end
+
+	return true
 end
 
 function Image:measure()
@@ -1065,21 +1176,13 @@ end
 Input = createClass(Node)
 Input.__input__ = true
 
+function isInput(input)
+	return type(input) == "table" and input.__input__ == true
+end
+
 function Input:constructor(attributes)
 	if type(attributes) ~= "table" then
 		attributes = {}
-	end
-
-	if attributes.backgroundColor == nil then
-		attributes.backgroundColor = WHITE
-	end
-
-	if attributes.foregroundColor == nil then
-		attributes.foregroundColor = BLACK
-	end
-
-	if attributes.padding == nil then
-		attributes.padding = 2
 	end
 
 	attributes.focusable = true
@@ -1130,6 +1233,10 @@ function Input:constructor(attributes)
 
 	Node.constructor(self, attributes)
 
+	--
+	-- Call methods
+	--
+
 	self:setText(attributes.text)
 end
 
@@ -1163,7 +1270,7 @@ function Input:moveCaretIndex(amount, selecting)
 		return false
 	end
 
-	if type(selection) ~= "boolean" then
+	if type(selecting) ~= "boolean" then
 		selecting = false
 	end
 
@@ -1279,8 +1386,6 @@ function Input:removeText(from, to)
 	from, to = math_min(from, to), math_max(from, to)
 	from, to = math_max(0, from), math_min(self.textLength, to)
 
-	local caretIndex = self.caretIndex
-
 	local previousText = self.text
 	self.text = utf8_sub(previousText, 1, from) .. utf8_sub(previousText, to + 1)
 	self.textLength = utf8_len(self.text)
@@ -1290,6 +1395,19 @@ function Input:removeText(from, to)
 	self:setCaretIndex(from)
 
 	return true
+end
+
+function Input:getSelectedText()
+	local caretIndex = self.caretIndex
+	local selectIndex = self.selectIndex
+
+	if caretIndex == selectIndex then
+		return ""
+	end
+
+	local from, to = math_min(caretIndex, selectIndex), math_max(caretIndex, selectIndex)
+
+	return utf8_sub(self.text, from + 1, to)
 end
 
 function Input:measure()
@@ -1603,7 +1721,7 @@ function splitChildren(
 		end
 	end
 
-	return lines, mainMaxLineSize, crossTotalLinesSize, secondPassItems, thirdPassItems
+	return lines, mainMaxLineSize, crossTotalLinesSize, secondPassItems, thirdPassItems, absoluteItems
 end
 
 function calculateLayout(node, availableWidth, availableHeight, parentIsMainAxisRow, parentStretchItems, forcedWidth, forcedHeight)
@@ -2248,12 +2366,18 @@ function calculateLayout(node, availableWidth, availableHeight, parentIsMainAxis
 				local childComputedWidth = child.computedWidth
 				local childComputedHeight = child.computedHeight
 
-				local childComputedX = justifyContent == JustifyContent.FlexEnd and computedWidth - childComputedWidth
-					or justifyContent == JustifyContent.Center and (computedWidth - childComputedWidth) * 0.5
+				local childComputedMainSize = child[mainAxisDimension]
+				local childComputedCrossSize = child[crossAxisDimension]
+
+				local childComputedMainPosition = justifyContent == JustifyContent.FlexEnd and containerMainSize - childComputedMainSize
+					or justifyContent == JustifyContent.Center and (containerMainSize - childComputedMainSize) * 0.5
 					or 0
-				local childComputedY = alignItems == AlignItems.FlexEnd and computedHeight - childComputedHeight
-					or alignItems == AlignItems.Center and (computedHeight - childComputedHeight) * 0.5
+				local childComputedCrossPosition = alignItems == AlignItems.FlexEnd and containerCrossSize - childComputedCrossSize
+					or alignItems == AlignItems.Center and (containerCrossSize - childComputedCrossSize) * 0.5
 					or 0
+
+				local childComputedX = isMainAxisRow and childComputedMainPosition or childComputedCrossPosition
+				local childComputedY = isMainAxisRow and childComputedCrossPosition or childComputedMainPosition
 
 				local hasLeft = child.resolvedLeftUnit ~= Unit.Auto
 				local hasRight = child.resolvedRightUnit ~= Unit.Auto
@@ -2701,10 +2825,11 @@ local function renderer(node, parentRenderX, parentRenderY, parentVisualX, paren
 				local childComputedY = child.computedY + scrollTop
 
 				if
-					childComputedX + childComputedWidth > 0
-					and childComputedY + childComputedHeight > 0
-					and childComputedX < computedWidth
-					and childComputedY < computedHeight
+					child.ignoreParentBounds
+					or childComputedX + childComputedWidth > 0
+						and childComputedY + childComputedHeight > 0
+						and childComputedX < computedWidth
+						and childComputedY < computedHeight
 				then
 					renderer(children[i], renderX + scrollLeft, renderY + scrollTop, scrollLeft, scrollTop, foregroundColor)
 				end
@@ -2864,10 +2989,11 @@ local function renderer(node, parentRenderX, parentRenderY, parentVisualX, paren
 			local childComputedY = child.computedY + scrollTop
 
 			if
-				childComputedX + childComputedWidth > 0
-				and childComputedY + childComputedHeight > 0
-				and childComputedX < computedWidth
-				and childComputedY < computedHeight
+				child.ignoreParentBounds
+				or childComputedX + childComputedWidth > 0
+					and childComputedY + childComputedHeight > 0
+					and childComputedX < computedWidth
+					and childComputedY < computedHeight
 			then
 				renderer(child, renderX, renderY, visualX, visualY, foregroundColor)
 			end
@@ -2962,10 +3088,11 @@ local function getHoveredNode(node)
 		local childComputedY = child.computedY + scrollTop
 
 		if
-			childComputedX + childComputedWidth > 0
-			and childComputedY + childComputedHeight > 0
-			and childComputedX < computedWidth
-			and childComputedY < computedHeight
+			child.ignoreParentBounds
+			or childComputedX + childComputedWidth > 0
+				and childComputedY + childComputedHeight > 0
+				and childComputedX < computedWidth
+				and childComputedY < computedHeight
 		then
 			local hoveredChild, hoveringHorizontalScrollBar, hoveringVerticalScrollBar = getHoveredNode(child)
 
@@ -3048,7 +3175,7 @@ local function cursor()
 			movingNode:onCursorMove(cursorX, cursorY)
 		end
 
-		if clickedNode and clickedNode.__input__ then
+		if clickedNode and isInput(clickedNode) then
 			clickedNode:setCaretIndex(clickedNode:getCaretIndexByCursor(cursorX), true)
 		end
 	end
@@ -3076,7 +3203,7 @@ local function onClick(button, state)
 
 					clickedNode = hoveredNode
 
-					if clickedNode.__input__ then
+					if isInput(clickedNode) then
 						clickedNode:setCaretIndex(clickedNode:getCaretIndexByCursor(cursorX))
 					end
 
@@ -3163,7 +3290,7 @@ local function onCharacter(character)
 		return
 	end
 
-	if focusedNode.__input__ then
+	if isInput(focusedNode) then
 		focusedNode:insertText(character)
 	end
 end
@@ -3180,10 +3307,110 @@ local function onKeyPressed(key, pressed, rep)
 			return
 		end
 
-		if focusedNode and focusedNode.__input__ then
-			focusedNode:removeText(focusedNode.caretIndex - 1, focusedNode.caretIndex)
+		if focusedNode and isInput(focusedNode) then
+			local caretIndex = focusedNode.caretIndex
+			local selectIndex = focusedNode.selectIndex
+
+			if caretIndex ~= selectIndex then
+				focusedNode:removeText(caretIndex, selectIndex)
+			else
+				focusedNode:removeText(caretIndex - 1, caretIndex)
+			end
+
 			keyTimer = setTimer(onKeyPressed, rep and 50 or 250, 1, key, pressed, true)
 		end
+	elseif key == "delete" then
+		if not pressed then
+			return
+		end
+
+		if focusedNode and isInput(focusedNode) then
+			local caretIndex = focusedNode.caretIndex
+			local selectIndex = focusedNode.selectIndex
+
+			if caretIndex ~= selectIndex then
+				focusedNode:removeText(caretIndex, selectIndex)
+			else
+				focusedNode:removeText(caretIndex, caretIndex + 1)
+			end
+
+			keyTimer = setTimer(onKeyPressed, rep and 50 or 250, 1, key, pressed, true)
+		end
+	elseif key == "arrow_l" then
+		if not pressed then
+			return
+		end
+
+		if focusedNode and isInput(focusedNode) then
+			focusedNode:moveCaretIndex(-1, getKeyState("lshift"))
+		end
+
+		keyTimer = setTimer(onKeyPressed, rep and 50 or 250, 1, key, pressed, true)
+	elseif key == "arrow_r" then
+		if not pressed then
+			return
+		end
+
+		if focusedNode and isInput(focusedNode) then
+			focusedNode:moveCaretIndex(1, getKeyState("lshift"))
+		end
+
+		keyTimer = setTimer(onKeyPressed, rep and 50 or 250, 1, key, pressed, true)
+	elseif key == "home" then
+		if not pressed then
+			return
+		end
+
+		if focusedNode and isInput(focusedNode) then
+			focusedNode:setCaretIndex(0, getKeyState("lshift"))
+		end
+	elseif key == "end" then
+		if not pressed then
+			return
+		end
+
+		if focusedNode and isInput(focusedNode) then
+			focusedNode:setCaretIndex(focusedNode.textLength, getKeyState("lshift"))
+		end
+	elseif key == "a" and getKeyState("lctrl") then
+		if not pressed then
+			return
+		end
+
+		if focusedNode and isInput(focusedNode) then
+			focusedNode:setCaretIndex(0)
+			focusedNode:setCaretIndex(focusedNode.textLength, true)
+		end
+	elseif key == "c" and getKeyState("lctrl") then
+		if not pressed then
+			return
+		end
+
+		if focusedNode and isInput(focusedNode) then
+			setClipboard(focusedNode:getSelectedText())
+		end
+	elseif key == "x" and getKeyState("lctrl") then
+		if not pressed then
+			return
+		end
+
+		if focusedNode and isInput(focusedNode) then
+			local selectedText = focusedNode:getSelectedText()
+
+			if utf8_len(selectedText) ~= 0 then
+				setClipboard(selectedText)
+				focusedNode:removeText(focusedNode.caretIndex, focusedNode.selectIndex)
+			end
+		end
+	end
+end
+
+local function onPaste(clipboard)
+	if focusedNode and isInput(focusedNode) then
+		clipboard = utf8_gsub(clipboard, "%c+", " ")
+		clipboard = utf8_match(clipboard, "^%s*(.-)%s*$")
+
+		focusedNode:insertText(clipboard)
 	end
 end
 
@@ -3204,6 +3431,7 @@ function initialize()
 	addEventHandler("onClientClick", root, onClick)
 	addEventHandler("onClientCharacter", root, onCharacter)
 	addEventHandler("onClientKey", root, onKeyPressed)
+	addEventHandler("onClientPaste", root, onPaste)
 end
 
 function finalize()
@@ -3213,4 +3441,5 @@ function finalize()
 	removeEventHandler("onClientClick", root, onClick)
 	removeEventHandler("onClientCharacter", root, onCharacter)
 	removeEventHandler("onClientKey", root, onKeyPressed)
+	removeEventHandler("onClientPaste", root, onPaste)
 end
