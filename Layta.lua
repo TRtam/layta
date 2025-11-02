@@ -503,27 +503,41 @@ function Node:constructor(attributes, ...)
 		attributes = {}
 	end
 
+	--
+	-- Node properties
+	--
+
 	self.parent = false
 	self.index = -1
 	self.children = {}
-
-	self.layoutDirty = true
-	self.canvasDirty = true
 
 	self.hoverable = type(attributes.hoverable) ~= "boolean" and true or attributes.hoverable
 	self.clickable = type(attributes.clickable) ~= "boolean" and true or attributes.clickable
 	self.focusable = attributes.focusable or false
 
+	--
+	-- Dirty flags
+	--
+
+	self.layoutDirty = true
+	self.canvasDirty = true
+
+	--
+	-- States
+	--
+
 	self.hovered = false
 	self.clicked = false
 	self.focused = false
 
+	--
+	-- Styles
+	--
+
 	self.id = false
-	self:setId(attributes.id)
 
 	self.visible = true
 	self.effectiveVisibility = true
-	self:setVisible(attributes.visible)
 
 	self.position = attributes.position or Position.Relative
 	self.left = attributes.left or Unit.Auto
@@ -588,6 +602,10 @@ function Node:constructor(attributes, ...)
 	self.scrollBarTrackColor = 0xff111111
 	self.scrollBarThumbColor = 0xff222222
 
+	--
+	-- Resolved styles
+	--
+
 	self.resolvedLeftValue, self.resolvedLeftUnit = resolveLength(self.left)
 	self.resolvedTopValue, self.resolvedTopUnit = resolveLength(self.top)
 	self.resolvedRightValue, self.resolvedRightUnit = resolveLength(self.right)
@@ -622,6 +640,10 @@ function Node:constructor(attributes, ...)
 	self.resolvedPaddingTopValue, self.resolvedPaddingTopUnit = resolveLength(self.paddingTop)
 	self.resolvedPaddingRightValue, self.resolvedPaddingRightUnit = resolveLength(self.paddingRight)
 	self.resolvedPaddingBottomValue, self.resolvedPaddingBottomUnit = resolveLength(self.paddingBottom)
+
+	--
+	-- Computed values
+	--
 
 	self.computedLeft = 0
 	self.computedTop = 0
@@ -666,6 +688,10 @@ function Node:constructor(attributes, ...)
 	self.computedHorizontalScrollBarThumbSize = 0
 	self.computedVerticalScrollBarThumbSize = 0
 
+	--
+	-- Rendered values
+	--
+
 	self.renderWidth = 0
 	self.renderHeight = 0
 
@@ -696,6 +722,10 @@ function Node:constructor(attributes, ...)
 	self.renderVerticalScrollBarThumbX = 0
 	self.renderVerticalScrollBarThumbY = 0
 
+	--
+	-- Direct Events
+	--
+
 	self.onCursorClick = attributes.onCursorClick
 	self.onCursorDown = attributes.onCursorDown
 	self.onCursorEnter = attributes.onCursorEnter
@@ -706,6 +736,9 @@ function Node:constructor(attributes, ...)
 	for i = 1, select("#", ...) do
 		self:appendChild(select(i, ...))
 	end
+
+	self:setId(attributes.id)
+	self:setVisible(attributes.visible)
 end
 
 function Node:destructor(...)
@@ -883,6 +916,34 @@ function Node:setFocused(focused)
 	return true
 end
 
+function Node:setWidth(width)
+	if width == self.width then
+		return false
+	end
+
+	self.width = width
+	self.resolvedWidthValue, self.resolvedWidthUnit = resolveLength(width)
+
+	self:markLayoutDirty()
+	self:markCanvasDirty()
+
+	return true
+end
+
+function Node:setHeight(height)
+	if height == self.height then
+		return false
+	end
+
+	self.height = height
+	self.resolvedWidthValue, self.resolvedWidthUnit = resolveLength(height)
+
+	self:markLayoutDirty()
+	self:markCanvasDirty()
+
+	return true
+end
+
 --
 -- Text
 --
@@ -895,6 +956,10 @@ function Text:constructor(attributes)
 		attributes = {}
 	end
 
+	--
+	-- Styles
+	--
+
 	self.text = attributes.text or ""
 
 	self.textSize = attributes.textSize or 1
@@ -906,6 +971,10 @@ function Text:constructor(attributes)
 	self.clip = attributes.clip or false
 	self.wordWrap = attributes.wordWrap or false
 	self.colorCoded = attributes.colorCoded or false
+
+	--
+	-- Computed values
+	--
 
 	self.computedTextWidth = 0
 	self.computedTextHeight = 0
@@ -948,7 +1017,15 @@ function Image:constructor(attributes)
 		attributes = {}
 	end
 
+	--
+	-- Styles
+	--
+
 	self.material = isMaterial(attributes.material) and attributes.material or false
+
+	--
+	-- Computed values
+	--
 
 	self.computedMaterialWidth = 0
 	self.computedMaterialHeight = 0
@@ -1007,23 +1084,33 @@ function Input:constructor(attributes)
 
 	attributes.focusable = true
 
-	self.viewWidth = 0
-	self.viewHeight = 0
-
-	self.viewScroll = 0
-	self.updateViewScroll = false
+	--
+	-- Node properties
+	--
 
 	self.caretIndex = 0
 	self.selectIndex = 0
 
-	self.textToCaretWidth = 0
+	self.viewScroll = 0
+	self.updateViewScroll = false
+
+	--
+	-- Dirty flags
+	--
+
+	self.viewDirty = true
+
+	--
+	-- Styles
+	--
 
 	self.caretWidth = attributes.caretWidth or 1
 	self.caretColor = attributes.caretColor or BLACK
 
+	self.selectColor = attributes.selectColor or 0x7f0000ff
+
 	self.text = ""
 	self.textLength = 0
-	self:setText(attributes.text)
 
 	self.textSize = attributes.textSize or 1
 	self.font = attributes.font or "default"
@@ -1031,10 +1118,19 @@ function Input:constructor(attributes)
 	self.alignX = attributes.alignX or "left"
 	self.alignY = attributes.alignY or "center"
 
+	--
+	-- Computed values
+	--
+
+	self.viewWidth = 0
+	self.viewHeight = 0
+
 	self.computedTextWidth = 0
 	self.computedTextHeight = 0
 
 	Node.constructor(self, attributes)
+
+	self:setText(attributes.text)
 end
 
 function Input:setCaretIndex(caretIndex, selecting)
@@ -1042,7 +1138,7 @@ function Input:setCaretIndex(caretIndex, selecting)
 		return false
 	end
 
-	if type(selection) ~= "boolean" then
+	if type(selecting) ~= "boolean" then
 		selecting = false
 	end
 
@@ -1085,8 +1181,10 @@ end
 function Input:getCaretIndexByCursor(cursorX)
 	local alignX = self.alignX
 
-	local textWidth = self.computedTextWidth
-	local textX = alignX == AlignX.Right and self.renderWidth - textWidth or alignX == AlignX.Center and (self.renderWidth - textWidth) * 0.5 or 0
+	local computedTextWidth = self.computedTextWidth
+	local textX = alignX == AlignX.Right and self.renderWidth - computedTextWidth
+		or alignX == AlignX.Center and (self.renderWidth - computedTextWidth) * 0.5
+		or 0
 
 	cursorX = cursorX - self.renderX - textX - self.viewScroll
 
@@ -1161,14 +1259,18 @@ function Input:insertText(text)
 	end
 
 	local caretIndex = self.caretIndex
+	local selectIndex = self.selectIndex
 
-	local previousValue = self.text
-	self.text = utf8_sub(previousValue, 1, caretIndex) .. text .. utf8_sub(previousValue, caretIndex + 1)
+	local from, to = math_min(caretIndex, selectIndex), math_max(caretIndex, selectIndex)
+	from, to = math_max(0, from), math_min(self.textLength, to)
+
+	local previousText = self.text
+	self.text = utf8_sub(previousText, 1, from) .. text .. utf8_sub(previousText, to + 1)
 	self.textLength = utf8_len(self.text)
 
 	self:markLayoutDirty()
 
-	self:setCaretIndex(caretIndex + utf8_len(text))
+	self:setCaretIndex(from + utf8_len(text))
 
 	return true
 end
@@ -1179,8 +1281,8 @@ function Input:removeText(from, to)
 
 	local caretIndex = self.caretIndex
 
-	local previousValue = self.text
-	self.text = utf8_sub(previousValue, 1, from) .. utf8_sub(previousValue, to + 1)
+	local previousText = self.text
+	self.text = utf8_sub(previousText, 1, from) .. utf8_sub(previousText, to + 1)
 	self.textLength = utf8_len(self.text)
 
 	self:markLayoutDirty()
@@ -1253,7 +1355,20 @@ function Input:draw(x, y, width, height, foregroundColor)
 			local alignX = self.alignX
 			local alignY = self.alignY
 
-			local caretPosition = dxGetTextWidth(utf8_sub(text, 1, self.caretIndex), textSize, font)
+			local caretIndex = self.caretIndex
+
+			local selectIndex = self.selectIndex
+			local selectWidth = 0
+
+			if caretIndex ~= selectIndex then
+				if selectIndex > caretIndex then
+					selectWidth = dxGetTextWidth(utf8_sub(text, caretIndex + 1, selectIndex), textSize, font)
+				else
+					selectWidth = -dxGetTextWidth(utf8_sub(text, selectIndex + 1, caretIndex), textSize, font)
+				end
+			end
+
+			local caretPosition = dxGetTextWidth(utf8_sub(text, 1, caretIndex), textSize, font)
 
 			local textWidth = self.computedTextWidth
 			local textX = alignX == AlignX.Right and width - textWidth or alignX == AlignX.Center and (width - textWidth) * 0.5 or 0
@@ -1277,6 +1392,13 @@ function Input:draw(x, y, width, height, foregroundColor)
 
 			local dxPreviousBlendMode = dxGetBlendMode()
 			local changedBlendMode = dxSetBlendMode(BlendMode.ModulateAdd)
+
+			if selectWidth ~= 0 then
+				local selectX = textX + caretPosition + viewScroll
+				local selectY = (height - self.computedTextHeight) * 0.5
+
+				dxDrawRectangle(selectX, selectY, selectWidth, self.computedTextHeight, self.selectColor)
+			end
 
 			if utf8_len(text) > 0 then
 				dxDrawText(text, textX + viewScroll, 0, width, height, foregroundColor, textSize, font, AlignX.Left, alignY)
@@ -1555,7 +1677,6 @@ function calculateLayout(node, availableWidth, availableHeight, parentIsMainAxis
 		then
 			return false
 		end
-		-- return false
 	end
 
 	node.layoutDirty = false
@@ -2348,7 +2469,7 @@ local function renderer(node, parentRenderX, parentRenderY, parentVisualX, paren
 	end
 
 	local backgroundColor = node.backgroundColor
-	local hasBackground = getColorAlpha(backgroundColor)
+	local hasBackground = getColorAlpha(backgroundColor) > 0
 	local backgroundShader = node.backgroundShader
 
 	local computedStrokeLeftWeight = node.computedStrokeLeftWeight
@@ -2377,12 +2498,18 @@ local function renderer(node, parentRenderX, parentRenderY, parentVisualX, paren
 
 		if canvas and (node.canvasWidth ~= computedWidth or node.canvasHeight ~= computedHeight) then
 			dxDestroyRenderTarget(canvas)
-			node.canvas = dxCreateRenderTarget(computedWidth, computedHeight, true)
+
+			canvas = dxCreateRenderTarget(computedWidth, computedHeight, true)
+			node.canvas = canvas
 
 			node.canvasWidth = computedWidth
 			node.canvasHeight = computedHeight
 
 			node.canvasDirty = true
+
+			if isMaterial(canvasShader) then
+				dxSetShaderValue(canvasShader, "TEXTURE", canvas)
+			end
 		end
 	elseif canvas ~= nil then
 		dxDestroyRenderTarget(canvas)
@@ -2675,8 +2802,14 @@ local function renderer(node, parentRenderX, parentRenderY, parentVisualX, paren
 					local visualScrollBarThumbX = visualScrollBarX + scrollBarThumbOffset
 					local visualScrollBarThumbY = visualScrollBarY
 
-					dxDrawRectangle(visualScrollBarX, visualScrollBarY, renderScrollBarWidth, renderScrollBarHeight, 0xff171717)
-					dxDrawRectangle(visualScrollBarThumbX, visualScrollBarThumbY, renderScrollBarThumbWidth, renderScrollBarThumbHeight, 0xffffffff)
+					dxDrawRectangle(visualScrollBarX, visualScrollBarY, renderScrollBarWidth, renderScrollBarHeight, node.scrollBarTrackColor)
+					dxDrawRectangle(
+						visualScrollBarThumbX,
+						visualScrollBarThumbY,
+						renderScrollBarThumbWidth,
+						renderScrollBarThumbHeight,
+						node.scrollBarThumbColor
+					)
 				end
 			end
 
@@ -2916,7 +3049,7 @@ local function cursor()
 		end
 
 		if clickedNode and clickedNode.__input__ then
-			clickedNode:setCaretIndex(clickedNode:getCaretIndexByCursor(cursorX))
+			clickedNode:setCaretIndex(clickedNode:getCaretIndexByCursor(cursorX), true)
 		end
 	end
 end
@@ -2942,6 +3075,10 @@ local function onClick(button, state)
 					end
 
 					clickedNode = hoveredNode
+
+					if clickedNode.__input__ then
+						clickedNode:setCaretIndex(clickedNode:getCaretIndexByCursor(cursorX))
+					end
 
 					local cursordown = Event("cursordown")
 					cursordown.cursorX = cursorX
@@ -3054,7 +3191,7 @@ end
 -- Tree
 --
 
-tree = Node({ width = SCREEN_WIDTH, height = SCREEN_HEIGHT })
+tree = Node({ width = SCREEN_WIDTH, height = SCREEN_HEIGHT, alignItems = AlignItems.FlexStart })
 
 --
 -- Initializer / Finalizer
