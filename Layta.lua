@@ -1356,39 +1356,66 @@ function Input:setText(text)
 	return true
 end
 
-function Input:insertText(text)
-	if type(text) ~= "string" then
+function Input:insertText(str)
+	if type(str) ~= "string" then
 		return false
 	end
 
-	if utf8_len(text) == 0 then
+	if utf8_len(str) == 0 then
 		return false
 	end
 
 	local caretIndex = self.caretIndex
 	local selectIndex = self.selectIndex
 
-	local from, to = math_min(caretIndex, selectIndex), math_max(caretIndex, selectIndex)
-	from, to = math_max(0, from), math_min(self.textLength, to)
+	local text = self.text
+	local textLength = self.textLength
 
-	local previousText = self.text
-	self.text = utf8_sub(previousText, 1, from) .. text .. utf8_sub(previousText, to + 1)
+	local from, to = math_min(caretIndex, selectIndex), math_max(caretIndex, selectIndex)
+	from, to = math_max(0, from), math_min(textLength, to)
+
+	self.text = utf8_sub(text, 1, from) .. str .. utf8_sub(text, to + 1)
 	self.textLength = utf8_len(self.text)
 
 	self:markLayoutDirty()
 
-	self:setCaretIndex(from + utf8_len(text))
+	self:setCaretIndex(from + utf8_len(str))
 
 	return true
 end
 
 function Input:removeText(from, to)
-	from, to = math_min(from, to), math_max(from, to)
-	from, to = math_max(0, from), math_min(self.textLength, to)
+	local text = self.text
+	local textLength = self.textLength
 
-	local previousText = self.text
-	self.text = utf8_sub(previousText, 1, from) .. utf8_sub(previousText, to + 1)
-	self.textLength = utf8_len(self.text)
+	from, to = math_min(from, to), math_max(from, to)
+	from, to = math_max(0, from), math_min(textLength, to)
+
+	local deletedText = utf8_sub(text, from + 1, to)
+	local deletedTextWidth = dxGetTextWidth(deletedText, self.textSize, self.font)
+
+	self.text = utf8_sub(text, 1, from) .. utf8_sub(text, to + 1)
+	self.textLength = utf8_len(text)
+
+	local viewScroll = self.viewScroll
+
+	if viewScroll < 0 then
+		viewScroll = viewScroll + deletedTextWidth
+
+		if viewScroll > 0 then
+			viewScroll = 0
+		end
+
+		self.viewScroll = viewScroll
+	elseif viewScroll > 0 then
+		viewScroll = viewScroll - deletedTextWidth
+
+		if viewScroll < 0 then
+			viewScroll = 0
+		end
+
+		self.viewScroll = viewScroll
+	end
 
 	self:markLayoutDirty()
 
