@@ -249,6 +249,10 @@ local function dxIsRenderTarget(dxRenderTarget)
 end
 
 local function dxCreateRenderTarget(width, height, alpha)
+	if width < 1 or height < 1 then
+		return false
+	end
+
 	local dxRenderTarget = _dxCreateRenderTarget(width, height, alpha)
 
 	if dxRenderTarget then
@@ -318,6 +322,10 @@ function dxCreateFont(path, size)
 end
 
 function svgCreate(width, height, str)
+	if width < 1 or height < 1 then
+		return false
+	end
+
 	local id = width .. height .. str
 
 	if isElement(createdSvgs[id]) then
@@ -559,18 +567,22 @@ function Node:constructor(attributes, ...)
 	self.index = -1
 	self.children = {}
 
-	self.hoverable = type(attributes.hoverable) ~= "boolean" and true or attributes.hoverable
-	self.clickable = type(attributes.clickable) ~= "boolean" and true or attributes.clickable
-	self.focusable = attributes.focusable or false
-
-	self.ignoreParentBounds = attributes.ignoreParentBounds or false
-
 	--
 	-- Dirty flags
 	--
 
 	self.layoutDirty = true
 	self.canvasDirty = true
+
+	--
+	-- Properties
+	--
+
+	self.hoverable = type(attributes.hoverable) ~= "boolean" and true or attributes.hoverable
+	self.clickable = type(attributes.clickable) ~= "boolean" and true or attributes.clickable
+	self.focusable = attributes.focusable or false
+
+	self.ignoreParentBounds = attributes.ignoreParentBounds or false
 
 	--
 	-- States
@@ -597,8 +609,8 @@ function Node:constructor(attributes, ...)
 
 	self.flexDirection = attributes.flexDirection or FlexDirection.Row
 	self.flexWrap = attributes.flexWrap or FlexWrap.NoWrap
-	self.flexShrink = attributes.flexShrink or 0
 	self.flexGrow = attributes.flexGrow or 0
+	self.flexShrink = attributes.flexShrink or 0
 
 	self.justifyContent = attributes.justifyContent or JustifyContent.FlexStart
 	self.alignItems = attributes.alignItems or AlignItems.Stretch
@@ -814,6 +826,10 @@ function Node:destructor(...)
 	end
 end
 
+--
+-- Node methods
+--
+
 function Node:setParent(parent)
 	if parent ~= false and not isNode(parent) then
 		return false
@@ -903,6 +919,10 @@ function Node:markCanvasDirty()
 		self.canvasDirty = true
 	end
 
+	if isInput(self) then
+		self.viewDirty = true
+	end
+
 	local parent = self.parent
 
 	if parent and not parent.canvasDirty then
@@ -910,34 +930,74 @@ function Node:markCanvasDirty()
 	end
 end
 
-function Node:setVisible(visible)
-	if type(visible) ~= "boolean" then
+function Node:setHoverable(hoverable)
+	if type(hoverable) ~= "boolean" then
 		return false
 	end
 
-	if visible == self.visible then
+	if hoverable == self.hoverable then
 		return false
 	end
 
-	self.visible = visible
+	self.hoverable = hoverable
 
 	return true
 end
 
-function Node:setId(id)
-	if id ~= false or (type(id) ~= "string" or utf8_len(id) == 0) then
+function Node:setClickable(clickable)
+	if type(clickable) ~= "boolean" then
 		return false
 	end
 
-	if id then
-		IDs[id] = self
-		IDs[self] = id
-	else
-		local id = IDs[self]
-
-		IDs[self] = nil
-		IDs[id] = nil
+	if clickable == self.clickable then
+		return false
 	end
+
+	self.clickable = clickable
+
+	return true
+end
+
+function Node:setFocusable(focusable)
+	if type(focusable) ~= "boolean" then
+		return false
+	end
+
+	if focusable == self.focusable then
+		return false
+	end
+
+	self.focusable = focusable
+
+	return true
+end
+
+function Node:setIgnoreParentBounds(ignoreParentBounds)
+	if type(ignoreParentBounds) ~= "boolean" then
+		return false
+	end
+
+	if ignoreParentBounds == self.ignoreParentBounds then
+		return false
+	end
+
+	self.ignoreParentBounds = ignoreParentBounds
+
+	self:markCanvasDirty()
+
+	return true
+end
+
+function Node:setHovered(hovered)
+	if type(hovered) ~= "boolean" then
+		return false
+	end
+
+	if hovered == self.hovered then
+		return false
+	end
+
+	self.hovered = hovered
 
 	return true
 end
@@ -968,8 +1028,462 @@ function Node:setFocused(focused)
 	self.focused = focused
 
 	if self.__input__ then
-		self:markViewDirty()
+		self:markCanvasDirty()
 	end
+
+	return true
+end
+
+function Node:setId(id)
+	if id ~= false or (type(id) ~= "string" or utf8_len(id) == 0) then
+		return false
+	end
+
+	if id then
+		IDs[id] = self
+		IDs[self] = id
+	else
+		local id = IDs[self]
+
+		IDs[self] = nil
+		IDs[id] = nil
+	end
+
+	return true
+end
+
+function Node:setVisible(visible)
+	if type(visible) ~= "boolean" then
+		return false
+	end
+
+	if visible == self.visible then
+		return false
+	end
+
+	self.visible = visible
+	self:updateEffectiveVisibility()
+
+	return true
+end
+
+function Node:updateEffectiveVisibility()
+	local effectiveVisibility = self.visible
+
+	local parent = self.parent
+	if parent then
+		effectiveVisibility = effectiveVisibility and parent.effectiveVisibility
+	end
+
+	self.effectiveVisibility = effectiveVisibility
+
+	local children = self.children
+	local childCount = #children
+
+	for i = 1, childCount do
+		children[i]:updateEffectiveVisibility()
+	end
+end
+
+function Node:setPosition(position)
+	if position == self.position then
+		return false
+	end
+
+	self.position = position
+
+	self:markLayoutDirty()
+	self:markCanvasDirty()
+
+	return true
+end
+
+function Node:setLeft(left)
+	if left == self.left then
+		return false
+	end
+
+	self.left = left
+
+	self:markLayoutDirty()
+	self:markCanvasDirty()
+
+	return true
+end
+
+function Node:setTop(top)
+	if top == self.top then
+		return false
+	end
+
+	self.top = top
+
+	self:markLayoutDirty()
+	self:markCanvasDirty()
+
+	return true
+end
+
+function Node:setRight(right)
+	if right == self.right then
+		return false
+	end
+
+	self.right = right
+
+	self:markLayoutDirty()
+	self:markCanvasDirty()
+
+	return true
+end
+
+function Node:setBottom(bottom)
+	if bottom == self.bottom then
+		return false
+	end
+
+	self.bottom = bottom
+
+	self:markLayoutDirty()
+	self:markCanvasDirty()
+
+	return true
+end
+
+function Node:setFlexDirection(flexDirection)
+	if flexDirection == self.flexDirection then
+		return false
+	end
+
+	self.flexDirection = flexDirection
+
+	self:markLayoutDirty()
+	self:markCanvasDirty()
+
+	return true
+end
+
+function Node:setFlexWrap(flexWrap)
+	if flexWrap == self.flexWrap then
+		return false
+	end
+
+	self.flexWrap = flexWrap
+
+	self:markLayoutDirty()
+	self:markCanvasDirty()
+
+	return true
+end
+
+function Node:setFlexGrow(flexGrow)
+	if flexGrow == self.flexGrow then
+		return false
+	end
+
+	self.flexGrow = flexGrow
+
+	self:markLayoutDirty()
+	self:markCanvasDirty()
+
+	return true
+end
+
+function Node:setFlexShrink(flexShrink)
+	if flexShrink == self.flexShrink then
+		return false
+	end
+
+	self.flexShrink = flexShrink
+
+	self:markLayoutDirty()
+	self:markCanvasDirty()
+
+	return true
+end
+
+function Node:setJustifyContent(justifyContent)
+	if justifyContent == self.justifyContent then
+		return false
+	end
+
+	self.justifyContent = justifyContent
+
+	self:markLayoutDirty()
+	self:markCanvasDirty()
+
+	return true
+end
+
+function Node:setAlignItems(alignItems)
+	if alignItems == self.alignItems then
+		return false
+	end
+
+	self.alignItems = alignItems
+
+	self:markLayoutDirty()
+	self:markCanvasDirty()
+
+	return true
+end
+
+function Node:setAlignSelf(alignSelf)
+	if alignSelf == self.alignSelf then
+		return false
+	end
+
+	self.alignSelf = alignSelf
+
+	self:markLayoutDirty()
+	self:markCanvasDirty()
+
+	return true
+end
+
+function Node:setGap(gap)
+	if gap == self.gap then
+		return false
+	end
+
+	self.gap = gap
+
+	self:markLayoutDirty()
+	self:markCanvasDirty()
+
+	return true
+end
+
+function Node:setColumnGap(columnGap)
+	if columnGap == self.columnGap then
+		return false
+	end
+
+	self.columnGap = columnGap
+
+	self:markLayoutDirty()
+	self:markCanvasDirty()
+
+	return true
+end
+
+function Node:setRowGap(rowGap)
+	if rowGap == self.rowGap then
+		return false
+	end
+
+	self.rowGap = rowGap
+
+	self:markLayoutDirty()
+	self:markCanvasDirty()
+
+	return true
+end
+
+function Node:setStrokeColor(strokeColor)
+	if strokeColor == self.strokeColor then
+		return false
+	end
+
+	self.strokeColor = strokeColor
+
+	self:markLayoutDirty()
+	self:markCanvasDirty()
+
+	return true
+end
+
+function Node:setStrokeWeight(strokeWeight)
+	if strokeWeight == self.strokeWeight then
+		return false
+	end
+
+	self.strokeWeight = strokeWeight
+
+	self:markLayoutDirty()
+	self:markCanvasDirty()
+
+	return true
+end
+
+function Node:setStrokeLeftWeight(strokeLeftWeight)
+	if strokeLeftWeight == self.strokeLeftWeight then
+		return false
+	end
+
+	self.strokeLeftWeight = strokeLeftWeight
+
+	self:markLayoutDirty()
+	self:markCanvasDirty()
+
+	return true
+end
+
+function Node:setStrokeTopWeight(strokeTopWeight)
+	if strokeTopWeight == self.strokeTopWeight then
+		return false
+	end
+
+	self.strokeTopWeight = strokeTopWeight
+
+	self:markLayoutDirty()
+	self:markCanvasDirty()
+
+	return true
+end
+
+function Node:setStrokeRightWeight(strokeRightWeight)
+	if strokeRightWeight == self.strokeRightWeight then
+		return false
+	end
+
+	self.strokeRightWeight = strokeRightWeight
+
+	self:markLayoutDirty()
+	self:markCanvasDirty()
+
+	return true
+end
+
+function Node:setStrokeBottomWeight(strokeBottomWeight)
+	if strokeBottomWeight == self.strokeBottomWeight then
+		return false
+	end
+
+	self.strokeBottomWeight = strokeBottomWeight
+
+	self:markLayoutDirty()
+	self:markCanvasDirty()
+
+	return true
+end
+
+function Node:setBorderRadius(borderRadius)
+	if borderRadius == self.borderRadius then
+		return false
+	end
+
+	self.borderRadius = borderRadius
+
+	self:markLayoutDirty()
+	self:markCanvasDirty()
+
+	return true
+end
+
+function Node:setBorderTopLeftRadius(borderTopLeftRadius)
+	if borderTopLeftRadius == self.borderTopLeftRadius then
+		return false
+	end
+
+	self.borderTopLeftRadius = borderTopLeftRadius
+
+	self:markLayoutDirty()
+	self:markCanvasDirty()
+
+	return true
+end
+
+function Node:setBorderTopRightRadius(borderTopRightRadius)
+	if borderTopRightRadius == self.borderTopRightRadius then
+		return false
+	end
+
+	self.borderTopRightRadius = borderTopRightRadius
+
+	self:markLayoutDirty()
+	self:markCanvasDirty()
+
+	return true
+end
+
+function Node:setBorderBottomLeftRadius(borderBottomLeftRadius)
+	if borderBottomLeftRadius == self.borderBottomLeftRadius then
+		return false
+	end
+
+	self.borderBottomLeftRadius = borderBottomLeftRadius
+
+	self:markLayoutDirty()
+	self:markCanvasDirty()
+
+	return true
+end
+
+function Node:setBorderBottomRightRadius(borderBottomRightRadius)
+	if borderBottomRightRadius == self.borderBottomRightRadius then
+		return false
+	end
+
+	self.borderBottomRightRadius = borderBottomRightRadius
+
+	self:markLayoutDirty()
+	self:markCanvasDirty()
+
+	return true
+end
+
+function Node:setPadding(padding)
+	if padding == self.padding then
+		return false
+	end
+
+	self.padding = padding
+
+	self:markLayoutDirty()
+	self:markCanvasDirty()
+
+	return true
+end
+
+function Node:setPaddingLeft(paddingLeft)
+	if paddingLeft == self.paddingLeft then
+		return false
+	end
+
+	self.paddingLeft = paddingLeft
+
+	self:markLayoutDirty()
+	self:markCanvasDirty()
+
+	return true
+end
+
+function Node:setPaddingTop(paddingTop)
+	if paddingTop == self.paddingTop then
+		return false
+	end
+
+	self.paddingTop = paddingTop
+
+	self:markLayoutDirty()
+	self:markCanvasDirty()
+
+	return true
+end
+
+function Node:setPaddingRight(paddingRight)
+	if paddingRight == self.paddingRight then
+		return false
+	end
+
+	self.paddingRight = paddingRight
+
+	self:markLayoutDirty()
+	self:markCanvasDirty()
+
+	return true
+end
+
+function Node:setPaddingBottom(paddingBottom)
+	if paddingBottom == self.paddingBottom then
+		return false
+	end
+
+	self.paddingBottom = paddingBottom
+
+	self:markLayoutDirty()
+	self:markCanvasDirty()
 
 	return true
 end
@@ -988,6 +1502,32 @@ function Node:setWidth(width)
 	return true
 end
 
+function Node:setMinWidth(minWidth)
+	if minWidth == self.minWidth then
+		return false
+	end
+
+	self.minWidth = minWidth
+
+	self:markLayoutDirty()
+	self:markCanvasDirty()
+
+	return true
+end
+
+function Node:setMaxWidth(maxWidth)
+	if maxWidth == self.maxWidth then
+		return false
+	end
+
+	self.maxWidth = maxWidth
+
+	self:markLayoutDirty()
+	self:markCanvasDirty()
+
+	return true
+end
+
 function Node:setHeight(height)
 	if height == self.height then
 		return false
@@ -995,6 +1535,58 @@ function Node:setHeight(height)
 
 	self.height = height
 	self.resolvedWidthValue, self.resolvedWidthUnit = resolveLength(height)
+
+	self:markLayoutDirty()
+	self:markCanvasDirty()
+
+	return true
+end
+
+function Node:setMinHeight(minHeight)
+	if minHeight == self.minHeight then
+		return false
+	end
+
+	self.minHeight = minHeight
+
+	self:markLayoutDirty()
+	self:markCanvasDirty()
+
+	return true
+end
+
+function Node:setMaxHeight(maxHeight)
+	if maxHeight == self.maxHeight then
+		return false
+	end
+
+	self.maxHeight = maxHeight
+
+	self:markLayoutDirty()
+	self:markCanvasDirty()
+
+	return true
+end
+
+function Node:setBackgroundColor(backgroundColor)
+	if backgroundColor == self.backgroundColor then
+		return false
+	end
+
+	self.backgroundColor = backgroundColor
+
+	self:markLayoutDirty()
+	self:markCanvasDirty()
+
+	return true
+end
+
+function Node:setForegroundColor(foregroundColor)
+	if foregroundColor == self.foregroundColor then
+		return false
+	end
+
+	self.foregroundColor = foregroundColor
 
 	self:markLayoutDirty()
 	self:markCanvasDirty()
@@ -1042,6 +1634,122 @@ function Text:constructor(attributes)
 	self.computedTextHeight = 0
 
 	Node.constructor(self, attributes)
+end
+
+--
+-- Text methods
+--
+
+function Text:setText(text)
+	if type(text) ~= "string" then
+		return false
+	end
+
+	if text == self.text then
+		return false
+	end
+
+	self.text = text
+
+	self:markLayoutDirty()
+	self:markCanvasDirty()
+
+	return true
+end
+
+function Text:setTextSize(textSize)
+	if type(textSize) ~= "number" then
+		return false
+	end
+
+	if textSize == self.textSize then
+		return false
+	end
+
+	self.textSize = textSize
+
+	self:markLayoutDirty()
+	self:markCanvasDirty()
+
+	return true
+end
+
+function Text:setFont(font)
+	if font == self.font then
+		return false
+	end
+
+	self.font = font
+
+	self:markLayoutDirty()
+	self:markCanvasDirty()
+
+	return true
+end
+
+function Text:setAlignX(alignX)
+	if alignX == self.alignX then
+		return false
+	end
+
+	self.alignX = alignX
+
+	self:markLayoutDirty()
+	self:markCanvasDirty()
+
+	return true
+end
+
+function Text:setAlignY(alignY)
+	if alignY == self.alignY then
+		return false
+	end
+
+	self.alignY = alignY
+
+	self:markLayoutDirty()
+	self:markCanvasDirty()
+
+	return true
+end
+
+function Text:setClip(clip)
+	if clip == self.clip then
+		return false
+	end
+
+	self.clip = clip
+
+	self:markLayoutDirty()
+	self:markCanvasDirty()
+
+	return true
+end
+
+function Text:setWordWrap(wordWrap)
+	if wordWrap == self.wordWrap then
+		return false
+	end
+
+	self.wordWrap = wordWrap
+
+	self:markLayoutDirty()
+	self:markCanvasDirty()
+
+	return true
+end
+
+function Text:setColorCoded(colorCoded)
+	if colorCoded == self.colorCoded then
+		return false
+	end
+
+	self.colorCoded = colorCoded
+
+	self:markLayoutDirty()
+	self:markCanvasDirty()
+
+	return true
 end
 
 function Text:measure(availableWidth, availableHeight)
@@ -1112,6 +1820,10 @@ function Image:constructor(attributes)
 
 	self:setMaterial(attributes.material)
 end
+
+--
+-- Image methods
+--
 
 function Image:onSvgUpdated()
 	self:markCanvasDirty()
@@ -1240,6 +1952,88 @@ function Input:constructor(attributes)
 	self:setText(attributes.text)
 end
 
+--
+-- Input methods
+--
+
+function Input:setCaretWidth(width)
+	if width == self.width then
+		return false
+	end
+
+	self.width = width
+
+	self:markLayoutDirty()
+	self:markCanvasDirty()
+
+	return true
+end
+
+function Input:setCaretColor(caretColor)
+	if caretColor == self.caretColor then
+		return false
+	end
+
+	self.caretColor = caretColor
+
+	self:markLayoutDirty()
+	self:markCanvasDirty()
+
+	return true
+end
+
+function Input:setTextSize(textSize)
+	if textSize == self.textSize then
+		return false
+	end
+
+	self.textSize = textSize
+
+	self:markLayoutDirty()
+	self:markCanvasDirty()
+
+	return true
+end
+
+function Input:setFont(font)
+	if font == self.font then
+		return false
+	end
+
+	self.font = font
+
+	self:markLayoutDirty()
+	self:markCanvasDirty()
+
+	return true
+end
+
+function Input:setAlignX(alignX)
+	if alignX == self.alignX then
+		return false
+	end
+
+	self.alignX = alignX
+
+	self:markLayoutDirty()
+	self:markCanvasDirty()
+
+	return true
+end
+
+function Input:setAlignY(alignY)
+	if alignY == self.alignY then
+		return false
+	end
+
+	self.alignY = alignY
+
+	self:markLayoutDirty()
+	self:markCanvasDirty()
+
+	return true
+end
+
 function Input:setCaretIndex(caretIndex, selecting)
 	if type(caretIndex) ~= "number" then
 		return false
@@ -1258,9 +2052,8 @@ function Input:setCaretIndex(caretIndex, selecting)
 		self.selectIndex = self.caretIndex
 	end
 
-	self.updateViewScroll = true
-	self:markViewDirty()
 	self:markCanvasDirty()
+	self.updateViewScroll = true
 
 	return true
 end
@@ -1448,18 +2241,6 @@ function Input:measure()
 	self.computedTextHeight = textHeight
 
 	return 200, textHeight
-end
-
-function Input:markViewDirty()
-	if self.viewDirty then
-		return false
-	end
-
-	self.viewDirty = true
-
-	self:markCanvasDirty()
-
-	return true
 end
 
 function Input:draw(x, y, width, height, foregroundColor)
@@ -3142,6 +3923,57 @@ local function cursor()
 	if not cursorShowing then
 		cursorX = -SCREEN_WIDTH
 		cursorY = -SCREEN_HEIGHT
+
+		if focusedNode then
+			if focusedNode.onBlur then
+				focusedNode:onBlur()
+			end
+
+			focusedNode:setFocused(false)
+			focusedNode = false
+		end
+
+		if clickedNode then
+			if clickedNode then
+				if clickedNode.onCursorUp then
+					clickedNode:onCursorUp("left", cursorX, cursorY)
+				end
+
+				local cursorup = Event("cursorup")
+				cursorup.cursorX = cursorX
+				cursorup.cursorY = cursorY
+
+				clickedNode:dispatchEvent(cursorup)
+
+				if clickedNode == hoveredNode and clickedNode.onCursorClick then
+					clickedNode:onCursorClick(cursorX, cursorY)
+
+					local cursorclick = Event("cursorclick")
+					cursorclick.cursorX = cursorX
+					cursorclick.cursorY = cursorY
+
+					clickedNode:dispatchEvent(cursorclick)
+				end
+
+				clickedNode = false
+			end
+		end
+
+		if draggingScrollBarAttachedTo then
+			draggingHorizontalScrollBar = false
+			draggingVerticalScrollBar = false
+			draggingScrollBarAttachedTo = nil
+			draggingScrollBarDeltaX = 0
+			draggingScrollBarDeltaY = 0
+		end
+
+		if hoveredNode then
+			if hoveredNode.onCursorLeave then
+				hoveredNode:onCursorLeave(cursorX, cursorY)
+			end
+
+			hoveredNode = false
+		end
 
 		return
 	end
