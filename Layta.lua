@@ -576,7 +576,7 @@ function Node:constructor(attributes, ...)
 	--
 
 	self.layoutDirty = true
-	self.canvasDirty = true
+	self.canvasDirty = false
 
 	--
 	-- Properties
@@ -3414,6 +3414,17 @@ local function renderer(
 		parentVisualScale = 1
 	end
 
+	local opacity = node.opacity * parentOpacity
+
+	if opacity == 0 then
+		return false
+	end
+
+	if opacity ~= node.previousOpacity then
+		node.previousOpacity = opacity
+		node.canvasDirty = true
+	end
+
 	local originalScale = node.scale
 	local renderScale = originalScale * parentRenderScale
 	local visualScale = originalScale * parentVisualScale
@@ -3455,17 +3466,6 @@ local function renderer(
 
 	local visualX = parentVisualX + (computedX + scaleOffsetX) * parentVisualScale
 	local visualY = parentVisualY + (computedY + scaleOffsetY) * parentVisualScale
-
-	local opacity = node.opacity * parentOpacity
-
-	if opacity == 0 then
-		return false
-	end
-
-	if opacity ~= node.previousOpacity then
-		node.previousOpacity = opacity
-		node.canvasDirty = true
-	end
 
 	local backgroundColor = setColorAlpha(node.backgroundColor, getColorAlpha(node.backgroundColor) * opacity)
 	local strokeColor = setColorAlpha(node.strokeColor, getColorAlpha(node.strokeColor) * opacity)
@@ -3535,23 +3535,23 @@ local function renderer(
 
 	if node.overflow ~= Overflow.None then
 		if canvas == nil then
-			canvas = dxCreateRenderTarget(computedWidth, computedHeight, true)
+			canvas = dxCreateRenderTarget(visualWidth, visualHeight, true)
 			node.canvas = canvas
 
-			node.canvasWidth = computedWidth
-			node.canvasHeight = computedHeight
+			node.canvasWidth = visualWidth
+			node.canvasHeight = visualHeight
 
 			node.canvasDirty = true
 		end
 
-		if canvas and (node.canvasWidth ~= computedWidth or node.canvasHeight ~= computedHeight) then
+		if canvas and (node.canvasWidth ~= visualWidth or node.canvasHeight ~= visualHeight) then
 			dxDestroyRenderTarget(canvas)
 
-			canvas = dxCreateRenderTarget(computedWidth, computedHeight, true)
+			canvas = dxCreateRenderTarget(visualWidth, visualHeight, true)
 			node.canvas = canvas
 
-			node.canvasWidth = computedWidth
-			node.canvasHeight = computedHeight
+			node.canvasWidth = visualWidth
+			node.canvasHeight = visualHeight
 
 			node.canvasDirty = true
 
@@ -3748,8 +3748,8 @@ local function renderer(
 			local childRenderX = renderX + renderScrollLeft
 			local childRenderY = renderY + renderScrollTop
 
-			local childVisualX = visualX + visualScrollLeft
-			local childVisualY = visualY + visualScrollTop
+			local childVisualX = 0 + visualScrollLeft
+			local childVisualY = 0 + visualScrollTop
 
 			local children = node.children
 			local childCount = #children
@@ -3770,7 +3770,7 @@ local function renderer(
 						and childComputedX < computedWidth
 						and childComputedY < computedHeight
 				then
-					renderer(child, childRenderX, childRenderY, childVisualX, childVisualY, foregroundColor, opacity, renderScale, 1)
+					renderer(child, childRenderX, childRenderY, childVisualX, childVisualY, foregroundColor, opacity, renderScale, visualScale)
 				end
 			end
 
@@ -3885,6 +3885,8 @@ local function renderer(
 		end
 
 		dxDrawImage(visualX, visualY, visualWidth, visualHeight, canvasShader or canvas)
+	elseif node.canvasDirty then
+		node.canvasDirty = false
 	end
 
 	if hasStroke then
@@ -4086,7 +4088,7 @@ local function cursor()
 
 		if clickedNode then
 			if clickedNode then
-				local cursorup = Event("cursorup")
+				local cursorup = Event("cursorup", { bubbles = true })
 				cursorup.cursorX = cursorX
 				cursorup.cursorY = cursorY
 				clickedNode:dispatchEvent(cursorup)
@@ -4207,7 +4209,7 @@ local function onClick(button, state)
 						clickedNode:setCaretIndex(clickedNode:getCaretIndexByCursor(cursorX))
 					end
 
-					local cursordown = Event("cursordown")
+					local cursordown = Event("cursordown", { bubbles = true })
 					cursordown.cursorX = cursorX
 					cursordown.cursorY = cursorY
 					clickedNode:dispatchEvent(cursordown)
@@ -4246,7 +4248,7 @@ local function onClick(button, state)
 			end
 		else
 			if clickedNode then
-				local cursorup = Event("cursorup")
+				local cursorup = Event("cursorup", { bubbles = true })
 				cursorup.cursorX = cursorX
 				cursorup.cursorY = cursorY
 				clickedNode:dispatchEvent(cursorup)
