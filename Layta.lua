@@ -224,6 +224,10 @@ local function getColorAlpha(color)
 	return color / 0x1000000 % 256
 end
 
+local function setColorAlpha(color, alpha)
+	return (color % 0x1000000) + math_floor(alpha) * 0x1000000
+end
+
 --
 -- Drawing
 --
@@ -650,6 +654,10 @@ function Node:constructor(attributes, ...)
 	self.backgroundColor = attributes.backgroundColor or TRANSPARENT
 	self.foregroundColor = attributes.foregroundColor or false
 
+	self.opacity = attributes.opacity or 1
+
+	self.scale = attributes.scale or 1
+
 	self.canvasWidth = 0
 	self.canvasHeight = 0
 
@@ -785,15 +793,32 @@ function Node:constructor(attributes, ...)
 	self.renderVerticalScrollBarThumbY = 0
 
 	--
-	-- Direct Events
+	-- Events listener
 	--
 
-	self.onCursorClick = attributes.onCursorClick
-	self.onCursorDown = attributes.onCursorDown
-	self.onCursorEnter = attributes.onCursorEnter
-	self.onCursorLeave = attributes.onCursorLeave
-	self.onCursorMove = attributes.onCursorMove
-	self.onCursorUp = attributes.onCursorUp
+	if attributes.onCursorClick then
+		self:addEventListener("cursorclick", attributes.onCursorClick)
+	end
+
+	if attributes.onCursorDown then
+		self:addEventListener("cursordown", attributes.onCursorDown)
+	end
+
+	if attributes.onCursorEnter then
+		self:addEventListener("cursorenter", attributes.onCursorEnter)
+	end
+
+	if attributes.onCursorLeave then
+		self:addEventListener("cursorleave", attributes.onCursorLeave)
+	end
+
+	if attributes.onCursorMove then
+		self:addEventListener("cursormove", attributes.onCursorMove)
+	end
+
+	if attributes.onCursorUp then
+		self:addEventListener("cursorup", attributes.onCursorUp)
+	end
 
 	--
 	-- Append any children
@@ -1035,18 +1060,16 @@ function Node:setFocused(focused)
 end
 
 function Node:setId(id)
-	if id ~= false or (type(id) ~= "string" or utf8_len(id) == 0) then
+	if id ~= false and (type(id) ~= "string" or utf8_len(id) == 0) then
 		return false
 	end
 
 	if id then
 		IDs[id] = self
-		IDs[self] = id
+		self.id = id
 	else
-		local id = IDs[self]
-
-		IDs[self] = nil
-		IDs[id] = nil
+		IDs[self.id] = nil
+		self.id = false
 	end
 
 	return true
@@ -1365,7 +1388,6 @@ function Node:setBorderRadius(borderRadius)
 
 	self.borderRadius = borderRadius
 
-	self:markLayoutDirty()
 	self:markCanvasDirty()
 
 	return true
@@ -1378,7 +1400,6 @@ function Node:setBorderTopLeftRadius(borderTopLeftRadius)
 
 	self.borderTopLeftRadius = borderTopLeftRadius
 
-	self:markLayoutDirty()
 	self:markCanvasDirty()
 
 	return true
@@ -1391,7 +1412,6 @@ function Node:setBorderTopRightRadius(borderTopRightRadius)
 
 	self.borderTopRightRadius = borderTopRightRadius
 
-	self:markLayoutDirty()
 	self:markCanvasDirty()
 
 	return true
@@ -1404,7 +1424,6 @@ function Node:setBorderBottomLeftRadius(borderBottomLeftRadius)
 
 	self.borderBottomLeftRadius = borderBottomLeftRadius
 
-	self:markLayoutDirty()
 	self:markCanvasDirty()
 
 	return true
@@ -1417,7 +1436,6 @@ function Node:setBorderBottomRightRadius(borderBottomRightRadius)
 
 	self.borderBottomRightRadius = borderBottomRightRadius
 
-	self:markLayoutDirty()
 	self:markCanvasDirty()
 
 	return true
@@ -1575,7 +1593,6 @@ function Node:setBackgroundColor(backgroundColor)
 
 	self.backgroundColor = backgroundColor
 
-	self:markLayoutDirty()
 	self:markCanvasDirty()
 
 	return true
@@ -1588,7 +1605,30 @@ function Node:setForegroundColor(foregroundColor)
 
 	self.foregroundColor = foregroundColor
 
-	self:markLayoutDirty()
+	self:markCanvasDirty()
+
+	return true
+end
+
+function Node:setOpacity(opacity)
+	if type(opacity) ~= "number" then
+		return false
+	end
+
+	self.opacity = opacity
+
+	self:markCanvasDirty()
+
+	return true
+end
+
+function Node:setScale(scale)
+	if type(scale) ~= "number" then
+		return false
+	end
+
+	self.scale = scale
+
 	self:markCanvasDirty()
 
 	return true
@@ -1765,14 +1805,29 @@ function Text:measure(availableWidth, availableHeight)
 	return textWidth, textHeight
 end
 
-function Text:draw(x, y, width, height, color)
+function Text:draw(x, y, width, height, color, scale)
 	local text = self.text
 
 	if utf8_len(text) == 0 then
 		return
 	end
 
-	dxDrawText(text, x, y, x + width, y + height, color, self.textSize, self.font, self.alignX, self.alignY, self.clip, self.wordWrap, false, self.colorCoded)
+	dxDrawText(
+		text,
+		x,
+		y,
+		x + width,
+		y + height,
+		color,
+		self.textSize * scale,
+		self.font,
+		self.alignX,
+		self.alignY,
+		self.clip,
+		self.wordWrap,
+		false,
+		self.colorCoded
+	)
 end
 
 --
@@ -1871,14 +1926,14 @@ function Image:measure()
 	return materialWidth, materialHeight
 end
 
-function Image:draw(x, y, width, height, color)
+function Image:draw(x, y, width, height, foregroundColor, scale)
 	local material = self.material
 
 	if not material then
 		return
 	end
 
-	dxDrawImage(x, y, width, height, material, 0, 0, 0, color)
+	dxDrawImage(x, y, width, height, material, 0, 0, 0, foregroundColor)
 end
 
 --
@@ -2243,7 +2298,7 @@ function Input:measure()
 	return 200, textHeight
 end
 
-function Input:draw(x, y, width, height, foregroundColor)
+function Input:draw(x, y, width, height, foregroundColor, scale)
 	local view = self.view
 
 	if view == nil then
@@ -2274,7 +2329,7 @@ function Input:draw(x, y, width, height, foregroundColor)
 			local viewScroll = self.viewScroll
 
 			local text = self.text
-			local textSize = self.textSize
+			local textSize = self.textSize * scale
 
 			local font = self.font
 
@@ -2296,7 +2351,7 @@ function Input:draw(x, y, width, height, foregroundColor)
 
 			local caretPosition = dxGetTextWidth(utf8_sub(text, 1, caretIndex), textSize, font)
 
-			local textWidth = self.computedTextWidth
+			local textWidth = self.computedTextWidth * scale
 			local textX = alignX == AlignX.Right and width - textWidth or alignX == AlignX.Center and (width - textWidth) * 0.5 or 0
 
 			if self.updateViewScroll then
@@ -2321,20 +2376,20 @@ function Input:draw(x, y, width, height, foregroundColor)
 
 			if selectWidth ~= 0 then
 				local selectX = textX + caretPosition + viewScroll
-				local selectY = (height - self.computedTextHeight) * 0.5
+				local selectY = (height - self.computedTextHeight * scale) * 0.5
 
-				dxDrawRectangle(selectX, selectY, selectWidth, self.computedTextHeight, self.selectColor)
+				dxDrawRectangle(selectX, selectY, selectWidth, self.computedTextHeight * scale, self.selectColor)
 			end
 
 			if utf8_len(text) > 0 then
-				dxDrawText(text, textX + viewScroll, 0, width, height, foregroundColor, textSize, font, AlignX.Left, alignY)
+				dxDrawText(text, textX + viewScroll, 0, width, height, foregroundColor, textSize * scale, font, AlignX.Left, alignY)
 			end
 
 			if self.focused then
 				local caretX = textX + caretPosition + viewScroll
-				local caretY = (height - self.computedTextHeight) * 0.5
+				local caretY = (height - self.computedTextHeight * scale) * 0.5
 
-				dxDrawRectangle(caretX, caretY, self.caretWidth, self.computedTextHeight, self.caretColor)
+				dxDrawRectangle(caretX, caretY, self.caretWidth, self.computedTextHeight * scale, self.caretColor)
 			end
 
 			if changedBlendMode then
@@ -3306,7 +3361,17 @@ technique rectangle {
 }
 ]]
 
-local function renderer(node, parentRenderX, parentRenderY, parentVisualX, parentVisualY, parentForegroundColor)
+local function renderer(
+	node,
+	parentRenderX,
+	parentRenderY,
+	parentVisualX,
+	parentVisualY,
+	parentForegroundColor,
+	parentOpacity,
+	parentRenderScale,
+	parentVisualScale
+)
 	if node == nil then
 		node = tree
 	end
@@ -3337,25 +3402,78 @@ local function renderer(node, parentRenderX, parentRenderY, parentVisualX, paren
 		parentForegroundColor = 0xffffffff
 	end
 
+	if not parentOpacity then
+		parentOpacity = 1
+	end
+
+	if not parentRenderScale then
+		parentRenderScale = 1
+	end
+
+	if not parentVisualScale then
+		parentVisualScale = 1
+	end
+
+	local originalScale = node.scale
+	local renderScale = originalScale * parentRenderScale
+	local visualScale = originalScale * parentVisualScale
+
+	if renderScale == 0 then
+		return false
+	end
+
+	if renderScale ~= node.previousScale then
+		node.previousScale = renderScale
+		node.viewDirty = true
+	end
+
 	local computedWidth = node.computedWidth
 	local computedHeight = node.computedHeight
 
-	local minSize = math_min(computedWidth, computedHeight)
+	local renderWidth = computedWidth * renderScale
+	local renderHeight = computedHeight * renderScale
 
-	node.renderWidth = computedWidth
-	node.renderHeight = computedHeight
+	node.renderWidth = renderWidth
+	node.renderHeight = renderHeight
+
+	local visualWidth = computedWidth * visualScale
+	local visualHeight = computedHeight * visualScale
+
+	local minSize = math_min(visualWidth, visualHeight)
 
 	local computedX = node.computedX
 	local computedY = node.computedY
 
-	local renderX = (parentRenderX or 0) + computedX
-	local renderY = (parentRenderY or 0) + computedY
+	local scaleOffsetX = (1 - originalScale) * computedWidth * 0.5
+	local scaleOffsetY = (1 - originalScale) * computedHeight * 0.5
+
+	local renderX = parentRenderX + (computedX + scaleOffsetX) * parentRenderScale
+	local renderY = parentRenderY + (computedY + scaleOffsetY) * parentRenderScale
 
 	node.renderX = renderX
 	node.renderY = renderY
 
-	local visualX = (parentVisualX or 0) + computedX
-	local visualY = (parentVisualY or 0) + computedY
+	local visualX = parentVisualX + (computedX + scaleOffsetX) * parentVisualScale
+	local visualY = parentVisualY + (computedY + scaleOffsetY) * parentVisualScale
+
+	local opacity = node.opacity * parentOpacity
+
+	if opacity == 0 then
+		return false
+	end
+
+	if opacity ~= node.previousOpacity then
+		node.previousOpacity = opacity
+		node.canvasDirty = true
+	end
+
+	local backgroundColor = setColorAlpha(node.backgroundColor, getColorAlpha(node.backgroundColor) * opacity)
+	local strokeColor = setColorAlpha(node.strokeColor, getColorAlpha(node.strokeColor) * opacity)
+	local foregroundColor = node.foregroundColor
+	if not foregroundColor then
+		foregroundColor = parentForegroundColor
+	end
+	foregroundColor = setColorAlpha(foregroundColor, getColorAlpha(foregroundColor) * opacity)
 
 	local computedBorderTopLeftRadius = 0
 	local computedBorderTopRightRadius = 0
@@ -3363,13 +3481,13 @@ local function renderer(node, parentRenderX, parentRenderY, parentVisualX, paren
 	local computedBorderBottomRightRadius = 0
 
 	if node.resolvedBorderRadiusUnit == Unit.Pixel then
-		local computedBorderRadius = node.resolvedBorderRadiusValue
+		local computedBorderRadius = node.resolvedBorderRadiusValue * visualScale
 		computedBorderTopLeftRadius = computedBorderRadius
 		computedBorderTopRightRadius = computedBorderRadius
 		computedBorderBottomLeftRadius = computedBorderRadius
 		computedBorderBottomRightRadius = computedBorderRadius
 	elseif node.resolvedBorderRadiusUnit == Unit.Percentage then
-		local computedBorderRadius = node.resolvedBorderRadiusValue * minSize
+		local computedBorderRadius = node.resolvedBorderRadiusValue * minSize * visualScale
 		computedBorderTopLeftRadius = computedBorderRadius
 		computedBorderTopRightRadius = computedBorderRadius
 		computedBorderBottomLeftRadius = computedBorderRadius
@@ -3377,39 +3495,37 @@ local function renderer(node, parentRenderX, parentRenderY, parentVisualX, paren
 	end
 
 	if node.resolvedBorderTopLeftRadiusUnit == Unit.Pixel then
-		computedBorderTopLeftRadius = node.resolvedBorderTopLeftRadiusValue
+		computedBorderTopLeftRadius = node.resolvedBorderTopLeftRadiusValue * visualScale
 	elseif node.resolvedBorderTopLeftRadiusUnit == Unit.Percentage then
-		computedBorderTopLeftRadius = node.resolvedBorderTopLeftRadiusValue * minSize
+		computedBorderTopLeftRadius = node.resolvedBorderTopLeftRadiusValue * minSize * visualScale
 	end
 
 	if node.resolvedBorderTopRightRadiusUnit == Unit.Pixel then
-		computedBorderTopRightRadius = node.resolvedBorderTopRightRadiusValue
+		computedBorderTopRightRadius = node.resolvedBorderTopRightRadiusValue * visualScale
 	elseif node.resolvedBorderTopRightRadiusUnit == Unit.Percentage then
-		computedBorderTopRightRadius = node.resolvedBorderTopRightRadiusValue * minSize
+		computedBorderTopRightRadius = node.resolvedBorderTopRightRadiusValue * minSize * visualScale
 	end
 
 	if node.resolvedBorderBottomLeftRadiusUnit == Unit.Pixel then
-		computedBorderBottomLeftRadius = node.resolvedBorderBottomLeftRadiusValue
+		computedBorderBottomLeftRadius = node.resolvedBorderBottomLeftRadiusValue * visualScale
 	elseif node.resolvedBorderBottomLeftRadiusUnit == Unit.Percentage then
-		computedBorderBottomLeftRadius = node.resolvedBorderBottomLeftRadiusValue * minSize
+		computedBorderBottomLeftRadius = node.resolvedBorderBottomLeftRadiusValue * minSize * visualScale
 	end
 
 	if node.resolvedBorderBottomRightRadiusUnit == Unit.Pixel then
-		computedBorderBottomRightRadius = node.resolvedBorderBottomRightRadiusValue
+		computedBorderBottomRightRadius = node.resolvedBorderBottomRightRadiusValue * visualScale
 	elseif node.resolvedBorderBottomRightRadiusUnit == Unit.Percentage then
-		computedBorderBottomRightRadius = node.resolvedBorderBottomRightRadiusValue * minSize
+		computedBorderBottomRightRadius = node.resolvedBorderBottomRightRadiusValue * minSize * visualScale
 	end
 
-	local backgroundColor = node.backgroundColor
 	local hasBackground = getColorAlpha(backgroundColor) > 0
 	local backgroundShader = node.backgroundShader
 
-	local computedStrokeLeftWeight = node.computedStrokeLeftWeight
-	local computedStrokeTopWeight = node.computedStrokeTopWeight
-	local computedStrokeRightWeight = node.computedStrokeRightWeight
-	local computedStrokeBottomWeight = node.computedStrokeBottomWeight
+	local computedStrokeLeftWeight = node.computedStrokeLeftWeight * visualScale
+	local computedStrokeTopWeight = node.computedStrokeTopWeight * visualScale
+	local computedStrokeRightWeight = node.computedStrokeRightWeight * visualScale
+	local computedStrokeBottomWeight = node.computedStrokeBottomWeight * visualScale
 
-	local strokeColor = node.strokeColor
 	local hasStroke = (computedStrokeLeftWeight > 0 or computedStrokeTopWeight > 0 or computedStrokeRightWeight > 0 or computedStrokeBottomWeight > 0)
 		and getColorAlpha(strokeColor) > 0
 	local strokeShader = node.strokeShader
@@ -3583,15 +3699,10 @@ local function renderer(node, parentRenderX, parentRenderY, parentVisualX, paren
 
 	if hasBackground then
 		if backgroundShader then
-			dxDrawImage(visualX, visualY, computedWidth, computedHeight, backgroundShader, 0, 0, 0, backgroundColor)
+			dxDrawImage(visualX, visualY, visualWidth, visualHeight, backgroundShader, 0, 0, 0, backgroundColor)
 		else
-			dxDrawRectangle(visualX, visualY, computedWidth, computedHeight, backgroundColor)
+			dxDrawRectangle(visualX, visualY, visualWidth, visualHeight, backgroundColor)
 		end
-	end
-
-	local foregroundColor = node.foregroundColor
-	if not foregroundColor then
-		foregroundColor = parentForegroundColor
 	end
 
 	if canvas then
@@ -3605,20 +3716,40 @@ local function renderer(node, parentRenderX, parentRenderY, parentVisualX, paren
 			local changedBlendMode = dxSetBlendMode(BlendMode.ModulateAdd)
 
 			if node.draw and getColorAlpha(foregroundColor) > 0 then
-				local computedPaddingLeft = node.computedPaddingLeft
-				local computedPaddingTop = node.computedPaddingTop
+				local computedPaddingLeft = node.computedPaddingLeft * visualScale
+				local computedPaddingTop = node.computedPaddingTop * visualScale
 
-				local innerWidth = computedWidth - computedStrokeLeftWeight - computedStrokeRightWeight - computedPaddingLeft - node.computedPaddingRight
-				local innerHeight = computedHeight - computedStrokeTopWeight - computedStrokeBottomWeight - computedPaddingTop - node.computedPaddingBottom
+				local innerWidth = visualWidth
+					- computedStrokeLeftWeight
+					- computedStrokeRightWeight
+					- computedPaddingLeft
+					- node.computedPaddingRight * visualScale
+				local innerHeight = visualHeight
+					- computedStrokeTopWeight
+					- computedStrokeBottomWeight
+					- computedPaddingTop
+					- node.computedPaddingBottom * visualScale
 
 				local innerX = visualX + computedStrokeLeftWeight + computedPaddingLeft
 				local innerY = visualY + computedStrokeTopWeight + computedPaddingTop
 
-				node:draw(innerX, innerY, innerWidth, innerHeight, foregroundColor)
+				node:draw(innerX, innerY, innerWidth, innerHeight, foregroundColor, visualScale)
 			end
 
 			local scrollLeft = -node.scrollLeft
 			local scrollTop = -node.scrollTop
+
+			local renderScrollLeft = scrollLeft * renderScale
+			local renderScrollTop = scrollTop * renderScale
+
+			local visualScrollLeft = scrollLeft * visualScale
+			local visualScrollTop = scrollLeft * visualScale
+
+			local childRenderX = renderX + renderScrollLeft
+			local childRenderY = renderY + renderScrollTop
+
+			local childVisualX = visualX + visualScrollLeft
+			local childVisualY = visualY + visualScrollTop
 
 			local children = node.children
 			local childCount = #children
@@ -3639,7 +3770,7 @@ local function renderer(node, parentRenderX, parentRenderY, parentVisualX, paren
 						and childComputedX < computedWidth
 						and childComputedY < computedHeight
 				then
-					renderer(children[i], renderX + scrollLeft, renderY + scrollTop, scrollLeft, scrollTop, foregroundColor)
+					renderer(child, childRenderX, childRenderY, childVisualX, childVisualY, foregroundColor, opacity, renderScale, 1)
 				end
 			end
 
@@ -3753,36 +3884,56 @@ local function renderer(node, parentRenderX, parentRenderY, parentVisualX, paren
 			dxSetRenderTarget(previousRenderTarget)
 		end
 
-		dxDrawImage(visualX, visualY, computedWidth, computedHeight, canvasShader or canvas)
+		dxDrawImage(visualX, visualY, visualWidth, visualHeight, canvasShader or canvas)
 	end
 
 	if hasStroke then
 		if strokeShader then
-			dxDrawImage(visualX, visualY, computedWidth, computedHeight, strokeShader, 0, 0, 0, strokeColor)
+			dxDrawImage(visualX, visualY, visualWidth, visualHeight, strokeShader, 0, 0, 0, strokeColor)
 		else
-			dxDrawRectangle(visualX, visualY, computedStrokeLeftWeight, computedHeight, strokeColor)
-			dxDrawRectangle(visualX, visualY, computedWidth, computedStrokeTopWeight, strokeColor)
-			dxDrawRectangle(visualX + computedWidth - computedStrokeRightWeight, visualY, computedStrokeRightWeight, computedHeight, strokeColor)
-			dxDrawRectangle(visualX, visualY + computedHeight - computedStrokeBottomWeight, computedWidth, computedStrokeBottomWeight, strokeColor)
+			dxDrawRectangle(visualX, visualY, computedStrokeLeftWeight, visualHeight, strokeColor)
+			dxDrawRectangle(visualX, visualY, visualWidth, computedStrokeTopWeight, strokeColor)
+			dxDrawRectangle(visualX + visualWidth - computedStrokeRightWeight, visualY, computedStrokeRightWeight, visualHeight, strokeColor)
+			dxDrawRectangle(visualX, visualY + visualHeight - computedStrokeBottomWeight, visualWidth, computedStrokeBottomWeight, strokeColor)
 		end
 	end
 
 	if not canvas then
 		if node.draw and getColorAlpha(foregroundColor) > 0 then
-			local computedPaddingLeft = node.computedPaddingLeft
-			local computedPaddingTop = node.computedPaddingTop
+			local computedPaddingLeft = node.computedPaddingLeft * visualScale
+			local computedPaddingTop = node.computedPaddingTop * visualScale
 
-			local innerWidth = computedWidth - computedStrokeLeftWeight - computedStrokeRightWeight - computedPaddingLeft - node.computedPaddingRight
-			local innerHeight = computedHeight - computedStrokeTopWeight - computedStrokeBottomWeight - computedPaddingTop - node.computedPaddingBottom
+			local innerWidth = visualWidth
+				- computedStrokeLeftWeight
+				- computedStrokeRightWeight
+				- computedPaddingLeft
+				- node.computedPaddingRight * visualScale
+			local innerHeight = visualHeight
+				- computedStrokeTopWeight
+				- computedStrokeBottomWeight
+				- computedPaddingTop
+				- node.computedPaddingBottom * visualScale
 
 			local innerX = visualX + computedStrokeLeftWeight + computedPaddingLeft
 			local innerY = visualY + computedStrokeTopWeight + computedPaddingTop
 
-			node:draw(innerX, innerY, innerWidth, innerHeight, foregroundColor)
+			node:draw(innerX, innerY, innerWidth, innerHeight, foregroundColor, visualScale)
 		end
 
 		local scrollLeft = node.scrollLeft
 		local scrollTop = node.scrollTop
+
+		local renderScrollLeft = scrollLeft * renderScale
+		local renderScrollTop = scrollTop * renderScale
+
+		local visualScrollLeft = scrollLeft * visualScale
+		local visualScrollTop = scrollLeft * visualScale
+
+		local childRenderX = renderX + renderScrollLeft
+		local childRenderY = renderY + renderScrollTop
+
+		local childVisualX = visualX + visualScrollLeft
+		local childVisualY = visualY + visualScrollTop
 
 		local children = node.children
 		local childCount = #children
@@ -3803,7 +3954,7 @@ local function renderer(node, parentRenderX, parentRenderY, parentVisualX, paren
 					and childComputedX < computedWidth
 					and childComputedY < computedHeight
 			then
-				renderer(child, renderX, renderY, visualX, visualY, foregroundColor)
+				renderer(child, childRenderX, childRenderY, childVisualX, childVisualY, foregroundColor, opacity, renderScale, visualScale)
 			end
 		end
 	end
@@ -3935,23 +4086,15 @@ local function cursor()
 
 		if clickedNode then
 			if clickedNode then
-				if clickedNode.onCursorUp then
-					clickedNode:onCursorUp("left", cursorX, cursorY)
-				end
-
 				local cursorup = Event("cursorup")
 				cursorup.cursorX = cursorX
 				cursorup.cursorY = cursorY
-
 				clickedNode:dispatchEvent(cursorup)
 
-				if clickedNode == hoveredNode and clickedNode.onCursorClick then
-					clickedNode:onCursorClick(cursorX, cursorY)
-
-					local cursorclick = Event("cursorclick")
+				if clickedNode == hoveredNode then
+					local cursorclick = Event("cursorclick", { bubbles = true })
 					cursorclick.cursorX = cursorX
 					cursorclick.cursorY = cursorY
-
 					clickedNode:dispatchEvent(cursorclick)
 				end
 
@@ -3968,10 +4111,10 @@ local function cursor()
 		end
 
 		if hoveredNode then
-			if hoveredNode.onCursorLeave then
-				hoveredNode:onCursorLeave(cursorX, cursorY)
-			end
-
+			local cursorleave = Event("cursorleave")
+			cursorleave.cursorX = cursorX
+			cursorleave.cursorY = cursorY
+			hoveredNode:dispatchEvent(cursorleave)
 			hoveredNode = false
 		end
 
@@ -3986,8 +4129,11 @@ local function cursor()
 	local hoveringNode, hoveringHorizontalScrollBar, hoveringVerticalScrollBar = getHoveredNode(tree)
 
 	if hoveringNode ~= hoveredNode then
-		if hoveredNode and hoveredNode.onCursorLeave then
-			hoveredNode:onCursorLeave(cursorX, cursorY)
+		if hoveredNode then
+			local cursorleave = Event("cursorleave")
+			cursorleave.cursorX = cursorX
+			cursorleave.cursorY = cursorY
+			hoveredNode:dispatchEvent(cursorleave)
 		end
 
 		hoveredNode = false
@@ -3995,8 +4141,11 @@ local function cursor()
 		if not hoveringHorizontalScrollBar and not hoveringVerticalScrollBar then
 			hoveredNode = hoveringNode
 
-			if hoveredNode and hoveredNode.onCursorEnter then
-				hoveredNode:onCursorEnter(cursorX, cursorY)
+			if hoveredNode then
+				local cursorenter = Event("cursorenter")
+				cursorenter.cursorX = cursorX
+				cursorenter.cursorY = cursorY
+				hoveredNode:dispatchEvent(cursorenter)
 			end
 		end
 	end
@@ -4046,20 +4195,12 @@ local function onClick(button, state)
 	if button == "left" then
 		if pressed then
 			if focusedNode and focusedNode ~= hoveredNode then
-				if focusedNode.onBlur then
-					focusedNode:onBlur()
-				end
-
 				focusedNode:setFocused(false)
 				focusedNode = false
 			end
 
 			if hoveredNode then
 				if hoveredNode.clickable then
-					if hoveredNode.onCursorDown then
-						hoveredNode:onCursorDown(button, cursorX, cursorY)
-					end
-
 					clickedNode = hoveredNode
 
 					if isInput(clickedNode) then
@@ -4069,15 +4210,10 @@ local function onClick(button, state)
 					local cursordown = Event("cursordown")
 					cursordown.cursorX = cursorX
 					cursordown.cursorY = cursorY
-
 					clickedNode:dispatchEvent(cursordown)
 				end
 
 				if hoveredNode.focusable then
-					if hoveredNode.onFocus then
-						hoveredNode:onFocus()
-					end
-
 					focusedNode = hoveredNode
 					focusedNode:setFocused(true)
 				end
@@ -4110,23 +4246,15 @@ local function onClick(button, state)
 			end
 		else
 			if clickedNode then
-				if clickedNode.onCursorUp then
-					clickedNode:onCursorUp(button, cursorX, cursorY)
-				end
-
 				local cursorup = Event("cursorup")
 				cursorup.cursorX = cursorX
 				cursorup.cursorY = cursorY
-
 				clickedNode:dispatchEvent(cursorup)
 
-				if clickedNode == hoveredNode and clickedNode.onCursorClick then
-					clickedNode:onCursorClick(cursorX, cursorY)
-
-					local cursorclick = Event("cursorclick")
+				if clickedNode == hoveredNode then
+					local cursorclick = Event("cursorclick", { bubbles = true })
 					cursorclick.cursorX = cursorX
 					cursorclick.cursorY = cursorY
-
 					clickedNode:dispatchEvent(cursorclick)
 				end
 
