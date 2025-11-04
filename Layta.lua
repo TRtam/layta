@@ -700,9 +700,9 @@ function Node:constructor(attributes, ...)
 	self.resolvedStrokeBottomWeightValue, self.resolvedStrokeBottomWeightUnit = resolveLength(self.strokeBottomWeight)
 
 	self.resolvedBorderRadiusValue, self.resolvedBorderRadiusUnit = resolveLength(self.borderRadius)
-	self.resolvedBorderTopLefttRadiusValue, self.resolvedBorderTopLefttRadiusUnit = resolveLength(self.borderTopLefttRadius)
+	self.resolvedBorderTopLeftRadiusValue, self.resolvedBorderTopLeftRadiusUnit = resolveLength(self.borderTopLeftRadius)
 	self.resolvedBorderTopRightRadiusValue, self.resolvedBorderTopRightRadiusUnit = resolveLength(self.borderTopRightRadius)
-	self.resolvedBorderBottomLefttRadiusValue, self.resolvedBorderBottomLefttRadiusUnit = resolveLength(self.borderBottomLefttRadius)
+	self.resolvedBorderBottomLeftRadiusValue, self.resolvedBorderBottomLeftRadiusUnit = resolveLength(self.borderBottomLeftRadius)
 	self.resolvedBorderBottomRightRadiusValue, self.resolvedBorderBottomRightRadiusUnit = resolveLength(self.borderBottomRightRadius)
 
 	self.resolvedPaddingValue, self.resolvedPaddingUnit = resolveLength(self.padding)
@@ -3307,7 +3307,7 @@ float stroke(float signedDistance, float weight, float antialiasing, float blur)
 
 float sdRectangle(float2 position, float2 size, float4 borderRadius) {
   borderRadius.xy = (position.x > 0.0) ? borderRadius.yw : borderRadius.xz;
-  borderRadius.x = (position.y > 0.0) ? borderRadius.x : borderRadius.y;
+  borderRadius.x = (position.y > 0.0) ? borderRadius.y : borderRadius.x;
 
   float2 q = abs(position) - size + borderRadius.x;
   return length(max(q, 0.0)) + min(max(q.x, q.y), 0.0) - borderRadius.x;
@@ -3487,7 +3487,7 @@ local function renderer(
 		computedBorderBottomLeftRadius = computedBorderRadius
 		computedBorderBottomRightRadius = computedBorderRadius
 	elseif node.resolvedBorderRadiusUnit == Unit.Percentage then
-		local computedBorderRadius = node.resolvedBorderRadiusValue * minSize * visualScale
+		local computedBorderRadius = node.resolvedBorderRadiusValue * minSize
 		computedBorderTopLeftRadius = computedBorderRadius
 		computedBorderTopRightRadius = computedBorderRadius
 		computedBorderBottomLeftRadius = computedBorderRadius
@@ -3497,25 +3497,25 @@ local function renderer(
 	if node.resolvedBorderTopLeftRadiusUnit == Unit.Pixel then
 		computedBorderTopLeftRadius = node.resolvedBorderTopLeftRadiusValue * visualScale
 	elseif node.resolvedBorderTopLeftRadiusUnit == Unit.Percentage then
-		computedBorderTopLeftRadius = node.resolvedBorderTopLeftRadiusValue * minSize * visualScale
+		computedBorderTopLeftRadius = node.resolvedBorderTopLeftRadiusValue * minSize
 	end
 
 	if node.resolvedBorderTopRightRadiusUnit == Unit.Pixel then
 		computedBorderTopRightRadius = node.resolvedBorderTopRightRadiusValue * visualScale
 	elseif node.resolvedBorderTopRightRadiusUnit == Unit.Percentage then
-		computedBorderTopRightRadius = node.resolvedBorderTopRightRadiusValue * minSize * visualScale
+		computedBorderTopRightRadius = node.resolvedBorderTopRightRadiusValue * minSize
 	end
 
 	if node.resolvedBorderBottomLeftRadiusUnit == Unit.Pixel then
 		computedBorderBottomLeftRadius = node.resolvedBorderBottomLeftRadiusValue * visualScale
 	elseif node.resolvedBorderBottomLeftRadiusUnit == Unit.Percentage then
-		computedBorderBottomLeftRadius = node.resolvedBorderBottomLeftRadiusValue * minSize * visualScale
+		computedBorderBottomLeftRadius = node.resolvedBorderBottomLeftRadiusValue * minSize
 	end
 
 	if node.resolvedBorderBottomRightRadiusUnit == Unit.Pixel then
 		computedBorderBottomRightRadius = node.resolvedBorderBottomRightRadiusValue * visualScale
 	elseif node.resolvedBorderBottomRightRadiusUnit == Unit.Percentage then
-		computedBorderBottomRightRadius = node.resolvedBorderBottomRightRadiusValue * minSize * visualScale
+		computedBorderBottomRightRadius = node.resolvedBorderBottomRightRadiusValue * minSize
 	end
 
 	local hasBackground = getColorAlpha(backgroundColor) > 0
