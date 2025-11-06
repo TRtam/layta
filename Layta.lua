@@ -1087,6 +1087,9 @@ function Node:setVisible(visible)
 	self.visible = visible
 	self:updateEffectiveVisibility()
 
+	self:markLayoutDirty()
+	self:markCanvasDirty()
+
 	return true
 end
 
@@ -3743,7 +3746,7 @@ local function renderer(
 			local renderScrollTop = scrollTop * renderScale
 
 			local visualScrollLeft = scrollLeft * visualScale
-			local visualScrollTop = scrollLeft * visualScale
+			local visualScrollTop = scrollTop * visualScale
 
 			local childRenderX = renderX + renderScrollLeft
 			local childRenderY = renderY + renderScrollTop
@@ -3922,14 +3925,14 @@ local function renderer(
 			node:draw(innerX, innerY, innerWidth, innerHeight, foregroundColor, visualScale)
 		end
 
-		local scrollLeft = node.scrollLeft
-		local scrollTop = node.scrollTop
+		local scrollLeft = -node.scrollLeft
+		local scrollTop = -node.scrollTop
 
 		local renderScrollLeft = scrollLeft * renderScale
 		local renderScrollTop = scrollTop * renderScale
 
 		local visualScrollLeft = scrollLeft * visualScale
-		local visualScrollTop = scrollLeft * visualScale
+		local visualScrollTop = scrollTop * visualScale
 
 		local childRenderX = renderX + renderScrollLeft
 		local childRenderY = renderY + renderScrollTop
