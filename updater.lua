@@ -28,7 +28,7 @@ end
 local function getChangedFiles(commit, oldSHA, callback)
 	fetchRemote("https://api.github.com/repos/TRtam/layta/compare/" .. oldSHA .. "..." .. commit.sha, {}, function(response, info)
 		if not info.success then
-			outputDebugString("Couldn't compare old sha with current one")
+			outputDebugString("layta: couldn't compare old sha with current one")
 			return
 		end
 
@@ -64,8 +64,10 @@ local function downloadFiles(files)
 		local entry = queue[1]
 
 		fetchRemote(entry.raw_url, {}, function(response, info)
+			outputDebugString("layta: downloading '" .. entry.filename .. "'...")
+
 			if not info.success then
-				outputDebugString("Couldn't fetch '" .. entry.filename .. "' raw content")
+				outputDebugString("layta: couldn't fetch '" .. entry.filename .. "' raw content")
 				return
 			end
 
@@ -82,7 +84,7 @@ local function downloadFiles(files)
 			table.remove(queue)
 
 			if #queue == 0 then
-				restartResource(resource)
+				outputDebugString("layta: all files have been downloaded, please restart the resource")
 			end
 		end)
 	end
@@ -90,7 +92,7 @@ end
 
 fetchRemote("https://api.github.com/repos/TRtam/layta/commits/main", {}, function(response, info)
 	if not info.success then
-		outputDebugString("Couldn't fetch latest version from repo")
+		outputDebugString("layta: couldn't fetch latest version from repo")
 		return
 	end
 
@@ -100,6 +102,8 @@ fetchRemote("https://api.github.com/repos/TRtam/layta/commits/main", {}, functio
 	local currentVersion = commit.sha
 
 	if currentVersion ~= previousVersion then
+		outputDebugString("layta: a mismatch between the local version and the latest version has been found, downloading latest files...")
+
 		putVersion(currentVersion)
 
 		getChangedFiles(commit, previousVersion, function(files)
