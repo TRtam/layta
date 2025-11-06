@@ -65,7 +65,7 @@ local function downloadFiles(files)
 
 		fetchRemote(entry.raw_url, {}, function(response, info)
 			if not info.success then
-				outputDebugString("Couldn't fetch '" .. entry.filename .. "' it's raw content")
+				outputDebugString("Couldn't fetch '" .. entry.filename .. "' raw content")
 				return
 			end
 
@@ -77,6 +77,12 @@ local function downloadFiles(files)
 			if file then
 				fileWrite(file, response)
 				fileClose(file)
+			end
+
+			table.remove(queue)
+
+			if #queue == 0 then
+				restartResource(resource)
 			end
 		end)
 	end
@@ -90,11 +96,14 @@ fetchRemote("https://api.github.com/repos/TRtam/layta/commits/main", {}, functio
 
 	local commit = fromJSON(response)
 
-	if commit.sha ~= getVersion() then
-		getChangedFiles(commit, getVersion(), function(files)
+	local previousVersion = getVersion()
+	local currentVersion = commit.sha
+
+	if currentVersion ~= previousVersion then
+		putVersion(currentVersion)
+
+		getChangedFiles(commit, previousVersion, function(files)
 			downloadFiles(files)
 		end)
-
-		putVersion(commit.sha)
 	end
 end)
