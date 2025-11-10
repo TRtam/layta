@@ -61,7 +61,7 @@ local function downloadFiles(files)
 	end
 
 	for i = 1, #queue do
-		local entry = queue[1]
+		local entry = queue[i]
 
 		fetchRemote(entry.raw_url, {}, function(response, info)
 			outputDebugString("layta: downloading '" .. entry.filename .. "'...")
