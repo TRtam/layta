@@ -1,6 +1,5 @@
 <meta>
   <min_mta_version both="1.6" />
-  <script src="updater.lua" type="server" />
   <script src="layta.lua" type="client" />
   <script src="bundler.lua" type="client" />
   <export function="import" type="client" />
