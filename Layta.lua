@@ -809,6 +809,22 @@ function Node:constructor(attributes, ...)
 	-- Events listener
 	--
 
+	self:addEventListener("cursordown", function()
+		self:setClicked(true)
+	end, { capture = true })
+
+	self:addEventListener("cursorenter", function()
+		self:setHovered(true)
+	end, { capture = true })
+
+	self:addEventListener("cursorleave", function()
+		self:setHovered(false)
+	end, { capture = true })
+
+	self:addEventListener("cursorup", function()
+		self:setClicked(false)
+	end, { capture = true })
+
 	if attributes.onCursorClick then
 		self:addEventListener("cursorclick", attributes.onCursorClick)
 	end
@@ -1219,6 +1235,7 @@ function Node:updateStyling()
 	if styling == self.styling then
 		return
 	end
+	self:applyStyling("default")
 	self:applyStyling(styling)
 end
 
@@ -1227,7 +1244,6 @@ function Node:applyStyling(styling)
 	local styles = self[styling]
 	for key, value in pairs(styles) do
 		if self[key] ~= value then
-			print(key, value)
 			self[key] = value
 			local up = utf8_sub(key, 1, 1):upper() .. utf8_sub(key, 2)
 			local resolvedValue, resolvedUnit = "resolved" .. up .. "Value", "resolved" .. up .. "Unit"
@@ -4264,7 +4280,6 @@ local function cursor()
 
 	if hoveringNode ~= hoveredNode then
 		if hoveredNode then
-			hoveredNode:setHovered(false)
 			local cursorleave = Event("cursorleave")
 			cursorleave.cursorX = cursorX
 			cursorleave.cursorY = cursorY
@@ -4277,7 +4292,6 @@ local function cursor()
 			hoveredNode = hoveringNode
 
 			if hoveredNode then
-				hoveredNode:setHovered(true)
 				local cursorenter = Event("cursorenter")
 				cursorenter.cursorX = cursorX
 				cursorenter.cursorY = cursorY
@@ -4338,7 +4352,6 @@ local function onClick(button, state)
 			if hoveredNode then
 				if hoveredNode.clickable then
 					clickedNode = hoveredNode
-					clickedNode:setClicked(true)
 
 					if isInput(clickedNode) then
 						clickedNode:setCaretIndex(clickedNode:getCaretIndexByCursor(cursorX))
@@ -4395,7 +4408,6 @@ local function onClick(button, state)
 					clickedNode:dispatchEvent(cursorclick)
 				end
 
-				clickedNode:setClicked(false)
 				clickedNode = false
 			end
 
