@@ -563,6 +563,8 @@ function Node:constructor(attributes, ...)
 		attributes = {}
 	end
 
+	debug = attributes.debug
+
 	--
 	-- Node properties
 	--
@@ -671,6 +673,17 @@ function Node:constructor(attributes, ...)
 	self.scrollBarSize = attributes.scrollBarSize or 4
 	self.scrollBarTrackColor = 0xff111111
 	self.scrollBarThumbColor = 0xff222222
+
+	self.styling = "default"
+	self.default = {}
+	for key, value in pairs(attributes) do
+		if key ~= "hover" and key ~= "active" and key ~= "focus" then
+			self.default[key] = value
+		end
+	end
+	self.hover = attributes.hover or {}
+	self.active = attributes.active or {}
+	self.focus = attributes.focus or {}
 
 	--
 	-- Resolved styles
@@ -1023,6 +1036,7 @@ function Node:setHovered(hovered)
 	end
 
 	self.hovered = hovered
+	self:updateStyling()
 
 	return true
 end
@@ -1037,6 +1051,7 @@ function Node:setClicked(clicked)
 	end
 
 	self.clicked = clicked
+	self:updateStyling()
 
 	return true
 end
@@ -1051,6 +1066,7 @@ function Node:setFocused(focused)
 	end
 
 	self.focused = focused
+	self:updateStyling()
 
 	if self.__input__ then
 		self:markCanvasDirty()
@@ -1109,6 +1125,119 @@ function Node:updateEffectiveVisibility()
 	for i = 1, childCount do
 		children[i]:updateEffectiveVisibility()
 	end
+end
+
+function Node:setStyle(key, value)
+	if value == self.default[key] then
+		return false
+	end
+
+	self.default[key] = value
+
+	if self.styling == "default" then
+		local up = utf8_sub(key, 1, 1):upper() .. utf8_sub(key, 2)
+		local resolvedValue, resolvedUnit = "resolved" .. up .. "Value", "resolved" .. up .. "Unit"
+		if self[resolvedValue] then
+			self[resolvedValue], self[resolvedUnit] = resolveLength(value)
+		end
+		self:markLayoutDirty()
+		self:markCanvasDirty()
+	end
+
+	return true
+end
+
+function Node:setHoverStyle(key, value)
+	if value == self.hover[key] then
+		return false
+	end
+
+	self.hover[key] = value
+
+	if self.styling == "hover" then
+		local up = utf8_sub(key, 1, 1):upper() .. utf8_sub(key, 2)
+		local resolvedValue, resolvedUnit = "resolved" .. up .. "Value", "resolved" .. up .. "Unit"
+		if self[resolvedValue] then
+			self[resolvedValue], self[resolvedUnit] = resolveLength(value)
+		end
+		self:markLayoutDirty()
+		self:markCanvasDirty()
+	end
+
+	return true
+end
+
+function Node:setActiveStyle(key, value)
+	if value == self.active[key] then
+		return false
+	end
+
+	self.active[key] = value
+
+	if self.styling == "active" then
+		local up = utf8_sub(key, 1, 1):upper() .. utf8_sub(key, 2)
+		local resolvedValue, resolvedUnit = "resolved" .. up .. "Value", "resolved" .. up .. "Unit"
+		if self[resolvedValue] then
+			self[resolvedValue], self[resolvedUnit] = resolveLength(value)
+		end
+		self:markLayoutDirty()
+		self:markCanvasDirty()
+	end
+
+	return true
+end
+
+function Node:setFocusedStyle(key, value)
+	if value == self.focus[key] then
+		return false
+	end
+
+	self.focus[key] = value
+
+	if self.styling == "focus" then
+		local up = utf8_sub(key, 1, 1):upper() .. utf8_sub(key, 2)
+		local resolvedValue, resolvedUnit = "resolved" .. up .. "Value", "resolved" .. up .. "Unit"
+		if self[resolvedValue] then
+			self[resolvedValue], self[resolvedUnit] = resolveLength(value)
+		end
+		self:markLayoutDirty()
+		self:markCanvasDirty()
+	end
+
+	return true
+end
+
+function Node:updateStyling()
+	local styling = "default"
+	if self.focused and next(self.focus) then
+		styling = "focus"
+	elseif self.clicked and next(self.active) then
+		styling = "active"
+	elseif self.hovered and next(self.hover) then
+		styling = "hover"
+	end
+	if styling == self.styling then
+		return
+	end
+	self:applyStyling(styling)
+end
+
+function Node:applyStyling(styling)
+	self.styling = styling
+	local styles = self[styling]
+	for key, value in pairs(styles) do
+		if self[key] ~= value then
+			print(key, value)
+			self[key] = value
+			local up = utf8_sub(key, 1, 1):upper() .. utf8_sub(key, 2)
+			local resolvedValue, resolvedUnit = "resolved" .. up .. "Value", "resolved" .. up .. "Unit"
+			if self[resolvedValue] then
+				self[resolvedValue], self[resolvedUnit] = resolveLength(value)
+			end
+		end
+	end
+	self:markLayoutDirty()
+	self:markCanvasDirty()
 end
 
 function Node:setPosition(position)
@@ -4135,6 +4264,7 @@ local function cursor()
 
 	if hoveringNode ~= hoveredNode then
 		if hoveredNode then
+			hoveredNode:setHovered(false)
 			local cursorleave = Event("cursorleave")
 			cursorleave.cursorX = cursorX
 			cursorleave.cursorY = cursorY
@@ -4147,6 +4277,7 @@ local function cursor()
 			hoveredNode = hoveringNode
 
 			if hoveredNode then
+				hoveredNode:setHovered(true)
 				local cursorenter = Event("cursorenter")
 				cursorenter.cursorX = cursorX
 				cursorenter.cursorY = cursorY
@@ -4207,6 +4338,7 @@ local function onClick(button, state)
 			if hoveredNode then
 				if hoveredNode.clickable then
 					clickedNode = hoveredNode
+					clickedNode:setClicked(true)
 
 					if isInput(clickedNode) then
 						clickedNode:setCaretIndex(clickedNode:getCaretIndexByCursor(cursorX))
@@ -4263,6 +4395,7 @@ local function onClick(button, state)
 					clickedNode:dispatchEvent(cursorclick)
 				end
 
+				clickedNode:setClicked(false)
 				clickedNode = false
 			end
 
